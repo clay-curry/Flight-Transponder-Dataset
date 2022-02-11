@@ -1,0 +1,81 @@
+	lat/lon origin= 33.192675 / 68.074577
+
+--------- Mission Start data ---------------
+Launch location type (1=airfield) : 1
+  Direction of takeoff in radians : -1.000000
+  Direction for landing in radians: -1.000000
+  Lat dir 1=N:	1, degrees 31.520582, radians 0.550138
+  Lon dir 1=E:	1, degrees 65.815177, radians 1.148692
+  2D Euc coords: -214179.406120, -183650.506807
+  Direction/distance to first wp: 0.444782, 138189.888160
+  Altitude (feet) :	0.000000
+Data for waypoint # 2
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 32.072172, radians 0.559765
+  Lon dir 1=E:	1, degrees 67.125457, radians 1.171560
+  2D Euc coords: -89434.759379, -124192.805042
+  Direction/distance to next wp: 1.038557,  56627.354529
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	100.000000 / 168.781000
+  Alt adj type:	0
+
+Data for waypoint # 3
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 32.512922, radians 0.567458
+  Lon dir 1=E:	1, degrees 67.427259, radians 1.176828
+  2D Euc coords: -60698.387528, -75398.561389
+  Direction/distance to next wp: 0.547458,  88863.008122
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	100.000000 / 168.781000
+  Alt adj type:	0
+
+Data for waypoint # 4
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 32.930474, radians 0.574745
+  Lon dir 1=E:	1, degrees 68.237198, radians 1.190964
+  2D Euc coords: 15177.321199, -29143.712587
+  Direction/distance to next wp: 1.199006,  97584.437647
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	100.000000 / 168.781000
+  Alt adj type:	0
+
+Data for waypoint # 5
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 33.747022, radians 0.588997
+  Lon dir 1=E:	1, degrees 68.622149, radians 1.197682
+  2D Euc coords: 50628.159086, 61773.615597
+  Direction/distance to next wp: 0.736975,  52237.110604
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	100.000000 / 168.781000
+  Alt adj type:	0
+
+Data for waypoint # 6
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 34.060186, radians 0.594462
+  Lon dir 1=E:	1, degrees 69.044057, radians 1.205046
+  2D Euc coords: 89309.991741, 96879.620022
+  Direction/distance to next wp: 1.237385,  26125.841665
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	120.000000 / 202.537200
+  Alt adj type:	0
+
+Data for waypoint # 7
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 34.281430, radians 0.598324
+  Lon dir 1=E:	1, degrees 69.139639, radians 1.206714
+  2D Euc coords: 97860.141974, 121566.752981
+  Direction/distance to next wp: 1.307269,  15615.270248
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	120.000000 / 202.537200
+  Alt adj type:	0
+
+Data for waypoint # 8
+  Turn type   :	0
+  Lat dir 1=N:	1, degrees 34.416616, radians 0.600683
+  Lon dir 1=E:	1, degrees 69.185683, radians 1.207518
+  2D Euc coords: 101927.729316, 136642.939440
+  Direction/distance to next wp: -1.000000,  -1.000000
+  Altitude (feet) :	18000.000000
+  Velocity (knots/fps):	120.000000 / 202.537200
+  Alt adj type:	0
+

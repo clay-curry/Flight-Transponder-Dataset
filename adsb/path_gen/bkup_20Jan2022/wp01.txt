@@ -1,0 +1,44 @@
+#Configuration and path waypoint data file, December, 2021.
+#Following is a single line of numeric values for configuration of the
+#path generation system. The fields are as follows:
+#1) max_sec defining time length in seconds or path type as follows:
+#   positive integer-> create path for this number of seconds, stop at last wp.
+#   0 -> Stop path creation at end of waypoint list, ignoring the end action.
+#   -1-> Ignore end action, instead loop path from end wp back to starting wp.
+#   -2-> Continue through the defined end action, if one exists.
+#   -3-> Continue through end action and reconnect path to last waypoint.
+#   -4-> Continue as in -3 but follow waypoints back to starting wp.
+#   -5-> Complete end action then go straight to the starting waypoint.
+#   any other negative value will be treated as 0.
+#2) sec_step a positive integer value representing the step size in seconds
+#   between generated positions.
+#3) sec_mission_start a positive integer representing how much time should
+#   elapse between the first waypoint and the start of location generation.
+#4) var_time A small positive integer used to randomly space the generation of
+#   location data. This value will be randomly generated (-/+var_time) before
+#   each new location and added to sec_step. Negative values will be changed to
+#   1. Set to 0 for no deviation in time between location/message generation. 
+#The following values represent perturbations to the actual, generated values
+#and should be small floats, such as 0.05.
+#5) var_alt float representing the random amount the altitude will be adjusted.
+#   This value will be *50 then + or - to the actual altitude.
+#6) var_vel float value adjustment for velocity but *100 then + or -.
+#7) var_dir float adjustment for direction (in radians), /2 then +/-.
+0  1  0  0  0.05  0.05  0.05
+#Waypoint list data, one line each, followed by end action line.
+#WP num, Turn type, latitude, longitude, altitude, velocity,
+#  final "true" means to ascend/descend immediately
+0,Short,N,37.628312,W,122.392340,3800.00,205,true
+1,Short,N,37.761456,W,122.375992,3800.00,205,true
+2,Short,N,37.800770,W,122.329712,3800.00,205,true
+3,Short,N,37.850624,W,122.330315,3800.00,205,true
+4,Short,N,37.890171,W,122.378166,3800.00,205,true
+5,Short,N,37.892040,W,122.465172,3800.00,205,true
+6,Short,N,37.851791,W,122.516426,3800.00,205,true
+7,Short,N,37.802876,W,122.516426,3800.00,205,true
+8,Short,N,37.760056,W,122.471069,3800.00,205,true
+#Last line is the end action type. Loop will cause a loop
+#  from the last waypoint (#8) back to waypoint #1 with
+#  waypoint #0 being the launch location.
+Loop,true,10000,10000,0.00,None,00:00:00,0.00
+
