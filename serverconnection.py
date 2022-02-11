@@ -1,19 +1,25 @@
-from string import ascii_letters, ascii_lowercase
+from re import L
 from time import sleep
+from typing import List
 from aircraft import Aircraft
-import requests as re
 import regex as rx
-import struct
-import math
-from logging import basicConfig, DEBUG, debug, info
+import requests as re
+from logging import basicConfig, DEBUG, debug, info, warning
 
-server_URL = 'https://globe.adsbexchange.com/'
-data_prefix = 'data/globe_'
-data_suffix = '.binCraft'
-
+server_URL = 'https://globe.adsbexchange.com'
+# current time (ms, since 1970)
 header_conf = {
-    "cookie": "adsbx_sid=1644360873538_qr2mhbhos4r",
-    "Referer": "https://globe.adsbexchange.com/",
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "if-none-match": "\"620589bd-21b8\"",
+    "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"98\", \"Google Chrome\";v=\"98\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "x-requested-with": "XMLHttpRequest",
+    "Referer": "https://globe.adsbexchange.com/?disable_fi=1",
     "Referrer-Policy": "strict-origin-when-cross-origin"
 }
 
@@ -24,41 +30,89 @@ class ServerConnection:
     """
 
     def __init__(self):
-        self.index_html = re.get(server_URL)
+        self.s = re.Session()
+        self.s.headers = header_conf
+        self.s.headers['cookie'] = self.make_cookie()
+
+        self.index_html = self.s.get(server_URL)
         debug(f'{server_URL} returned with status {self.index_html.status_code}')
         if self.index_html.status_code >= 400:
             raise re.ConnectionError(
                 f"ServerConnection object could not connect to {server_URL}")
-        self.headers = header_conf
-        #self.headers['cookie'] = self.make_cookie()
-        debug(f"Headers = {self.headers}")
-        get_map_info(self)
-
-    def fetch_tile(self, index):
-        return self.decode_response(re.get(server_URL + data_prefix + index + data_suffix, headers=self.headers))
+        debug(f"Headers = {self.s.headers}")
+        # get_map_info(self)
 
     def make_cookie(self):
         from time import time
         from random import choices
-        ts = str(int(time() * 1000) + 2*86400*1000)
-        number = ''.join(choices(ascii_lowercase + '1234567890', k=11))
-        adsbx_sid = ts + "_" + number
-        return adsbx_sid
+        from string import ascii_lowercase
+        sumbit_time_ms = int(time() * 1000)
 
-    def decode_response(self, data):
+        cookie_expire = str(sumbit_time_ms + 2*86400*1000)  # two days
+        cookie_token = '_' + \
+            ''.join(choices(ascii_lowercase + '1234567890', k=11))
+        cookie = 'adsbx_sid=' + cookie_expire + cookie_token
+
+        new_cookie_head = {
+            "accept": "application/json, text/javascript, */*; q=0.01",
+            "accept-language": "en-US,en;q=0.9",
+            "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"98\", \"Google Chrome\";v=\"98\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "x-requested-with": "XMLHttpRequest",
+            "cookie":   cookie,
+            "Referer": "https://globe.adsbexchange.com/?disable_fi=1",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+        }
+        submit_cookie_to = server_URL + \
+            '/globeRates.json?_=' + str(sumbit_time_ms)
+        r = re.get(submit_cookie_to, headers=new_cookie_head)
+
+        return cookie
+
+    def fetch_tile(self, index) -> re.models.Response:
+        data_prefix = '/data/globe_'
+        data_suffix = '.binCraft'
+        r = self.s.get(server_URL + data_prefix + index + data_suffix)
+        if r.status_code >= 400:
+            warning(
+                f'fetch_time{ index } returned with status code {r.status_code}. Trying again with a new cookie in 3 seconds.')
+            self.s.headers['cookie'] = self.make_cookie()
+            sleep(3)
+            r = self.s.get(server_URL + data_prefix + index + data_suffix)
+            if r.status_code >= 400:
+                raise re.ConnectionError(
+                    f"ServerConnection object could not connect to {server_URL}")
+        return r
+
+    def fetch_region(self, indexes: List[str]) -> List[Aircraft]:
+        crafts = []
+        for index in indexes:
+            t = self.fetch_tile(index)
+            crafts.append(self.decode_response(t.content))
+            sleep(2)
+        return crafts
+
+    def decode_response(self, data) -> List[Aircraft]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
 
         Note that wherever byte transformations seem ambiguous, trust me, they were confusing to me too. This particular
         encoding is proprietary and thus, closed-source. Fortunately, there is minimal ambiguity once decoded.
 
-        You will find that this function is a one-to-one transpiled version of the JS function for decoding messages in 
-        browser. The server returns attributes of PlaneObjects where attributes are encoded as binary words of various 
+        You will find that this function is a one-to-one transpiled version of the JS function for decoding messages in
+        browser. The server returns attributes of PlaneObjects where attributes are encoded as binary words of various
         byte lengths. The exact details of how attributes are organized and decoded are written as code comments.
 
         Args:
             data ([type]): raw bytes from the adsbexchange.com server
 
         """
+        import struct
+        import math
+
         debug(f'len(data) = {len(data)}')
         # let vals = new Uint32Array(data.buffer, 0, 8)
         vals = struct.unpack_from('<8I', data, 0)
@@ -306,6 +360,7 @@ class ServerConnection:
         return aircraft
 
 
+"""
 def get_map_info(conn):
     global server_URL
     # retrieve attributes needed to find map tiles
@@ -323,10 +378,9 @@ def get_map_info(conn):
     from region import globeIndexGrid, globeIndexSpecialTiles
     globeIndexGrid = attributes['globeIndexGrid']
     globeIndexSpecialTiles = attributes['globeIndexSpecialTiles']
-
+"""
 
 if __name__ == "__main__":
     basicConfig(format="%(message)s", level=DEBUG)
     conn = ServerConnection()
-    print(conn.make_cookie())
-    conn.fetch_tile("5988")
+    conn.fetch_region(["5988"])
