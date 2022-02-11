@@ -7,3 +7,4 @@ class Aircraft:
 
     def __setitem__(self, index, value):
         self.__dict__[self.varIndex[index]] = value
+

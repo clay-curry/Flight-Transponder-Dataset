@@ -1,11 +1,10 @@
-from string import ascii_letters, ascii_lowercase
-from time import sleep
+from string import ascii_lowercase
 from aircraft import Aircraft
 import requests as re
 import regex as rx
 import struct
 import math
-from logging import basicConfig, DEBUG, debug, info
+from logging import basicConfig, DEBUG, debug
 
 server_URL = 'https://globe.adsbexchange.com/'
 data_prefix = 'data/globe_'
@@ -35,7 +34,8 @@ class ServerConnection:
         get_map_info(self)
 
     def fetch_tile(self, index):
-        return self.decode_response(re.get(server_URL + data_prefix + index + data_suffix, headers=self.headers))
+        t = re.get(server_URL + data_prefix + index + data_suffix)
+        return self.decode_response(t.content)
 
     def make_cookie(self):
         from time import time

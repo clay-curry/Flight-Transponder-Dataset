@@ -1,7 +1,7 @@
 import math
 
 # number of lat, long divisions per tile
-globeIndexGrid = -1
+globeIndexGrid = 3
 globeIndexSpecialTiles = {}
 globeIndexCached = {}
 
@@ -16,13 +16,12 @@ def globeIndexes(region):
 
 
 def globe_index(lat, lon):
-    # lat ∈ [-90, 90] (south to north)    1° lat = 69 miles
-    # lon ∈ (-180, 180) (west to east)    1° lon = 54.6 miles
-
     grid = globeIndexGrid
 
     lat = grid * math.floor((lat + 90) / grid) - 90
     lon = grid * math.floor((lon + 180) / grid) - 180
+    print(lat)
+    print(lon)
 
     i = math.floor((lat + 90) / grid)
     j = math.floor((lon + 180) / grid)
@@ -54,6 +53,11 @@ class Region():
         south_bound = lat - rad/69.0 if lat - rad/69.0 > -89.5 else -89.5
         east_bound = lon + rad/54.6 if lon + rad/54.6 < 179 else 179
         west_bound = lon - rad/54.6 if lon - rad/54.6 > -179 else -179
+        
+        # lat ∈ [-90, 90] (south to north)    1° lat = 69 miles
+        # lon ∈ (-180, 180) (west to east)    1° lon = 54.6 miles
+
+
 
     def update_region():
         pass

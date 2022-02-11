@@ -1,3 +1,5 @@
+from serverconnection import ServerConnection
+from region import Region
 from aircraft import Aircraft
 from typing import List
 
@@ -12,3 +14,9 @@ class Adsbexchange:
 
     def fetch_region():
         pass
+
+
+if __name__ == "__main__":
+    adsb = Adsbexchange()
+    adsb.conn.fetch_tile(index=['5988'])
+    
