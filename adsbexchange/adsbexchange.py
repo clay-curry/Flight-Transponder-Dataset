@@ -1,5 +1,5 @@
 from serverconnection import ServerConnection
-from region import Region
+from airspace import Airspace
 from aircraft import Aircraft
 from typing import List
 
