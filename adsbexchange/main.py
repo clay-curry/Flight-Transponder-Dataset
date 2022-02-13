@@ -1,6 +1,4 @@
 from adsbexchange import Adsbexchange
-from aircraft import Aircraft
-
 
 def run():
     a = Adsbexchange()
