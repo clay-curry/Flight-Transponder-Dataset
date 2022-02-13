@@ -18,5 +18,5 @@ class Adsbexchange:
 
 if __name__ == "__main__":
     adsb = Adsbexchange()
-    adsb.conn.fetch_tile(index=['5988'])
+    adsb.conn.fetch_tiles(index=['5988'])
     

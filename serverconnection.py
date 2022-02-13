@@ -40,7 +40,7 @@ class ServerConnection:
             raise re.ConnectionError(
                 f"ServerConnection object could not connect to {server_URL}")
         debug(f"Headers = {self.s.headers}")
-        
+
     def make_cookie(self):
         from time import time
         from random import choices
@@ -87,11 +87,11 @@ class ServerConnection:
                     f"ServerConnection object could not connect to {server_URL}")
         return r
 
-    def fetch_region(self, indexes: List[str]) -> List[Aircraft]:
+    def fetch_tiles(self, indexes: List[str]) -> List[Aircraft]:
         crafts = []
         for index in indexes:
             t = self.fetch_tile(index)
-            crafts.append(self.decode_response(t.content))
+            crafts.extend(self.decode_response(t.content))
             sleep(2)
         return crafts
 
@@ -108,7 +108,7 @@ class ServerConnection:
         Args:
             data ([type]): raw bytes from the adsbexchange.com server
         """
-        
+
         import struct
         import math
 
