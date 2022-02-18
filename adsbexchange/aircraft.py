@@ -1,86 +1,91 @@
-from typing import Dict
+from typing import Dict, List
 
 
 class Aircraft:
     def __init__(self):
-        self.hex = None
-        self.seen_pos = None
-        self.seen_pos = None
-        self.seen = None
+        self.hex = self.seen_pos = self.seen = None
+        self.lon = self.lat = None
+        self.baro_rate =self.geom_rate = self.alt_baro = self.alt_geom = None
+        self.nav_altitude_mcp = self.nav_altitude_fms = self.nav_qnh = self.nav_heading = None
+        self.squawk = self.gs = self.mach = self.roll = None
+        self.track = self.track_rate = self.mag_heading = self.true_heading = None
+        self.wd = self.ws = self.oat = self.tat = None
+        self.tas = self.ias = self.rc = self.messages = None
+        self.category = self.nic = None
+        self.nav_modes = self.emergency = self.type = None
+        self.airground = self.nav_altitude_src = None
+        self.sil_type = self.adsb_version = self.adsr_version = self.tisb_version = None
+        self.nac_p = self.nac_v = None
+        self.sil = self.gva = self.sda = self.nic_a = self.nic_c = None
+        self.flight = self.dbFlags = self.t = self.r = None
+        self.receiverCount = self.rssi = self.extraFlags = self.nogps = None
+        self.nic_baro = self.alert1 = self.spi = self.calc_track = self.version = self.rId = None
 
-        self.lon = None
-        self.lat = None
+    def to_list(self) -> List[str]:
+        return [self.hex,
+                self.seen_pos,
+                self.seen,
+                self.lon,
+                self.lat,
+                self.baro_rate,
+                self.geom_rate,
+                self.alt_baro,
+                self.alt_geom,
+                self.nav_altitude_mcp,
+                self.nav_altitude_fms,
+                self.nav_qnh,
+                self.nav_heading,
+                self.squawk,
+                self.gs,
+                self.mach,
+                self.roll,
+                self.track,
+                self.track_rate,
+                self.mag_heading,
+                self.true_heading,
+                self.wd,
+                self.ws,
+                self.oat,
+                self.tat,
+                self.tas,
+                self.ias,
+                self.rc,
+                self.messages,
+                self.category,
+                self.nic,
+                self.nav_modes,
+                self.emergency,
+                self.type,
+                self.airground,
+                self.nav_altitude_src,
+                self.sil_type,
+                self.adsb_version,
+                self.adsr_version,
+                self.tisb_version,
+                self.nac_p,
+                self.nac_v,
+                self.sil,
+                self.gva,
+                self.sda,
+                self.nic_a,
+                self.nic_c,
+                self.flight,
+                self.dbFlags,
+                self.t,
+                self.r,
+                self.receiverCount,
+                self.rssi,
+                self.extraFlags,
+                self.nogps,
+                self.nic_baro,
+                self.alert1,
+                self.spi,
+                self.calc_track,
+                self.version,
+                self.rId]
 
-        self.baro_rate = None
-        self.geom_rate = None
-        self.alt_baro = None
-        self.alt_geom = None
-
-        self.nav_altitude_mcp = None
-        self.nav_altitude_fms = None
-        self.nav_qnh = None
-        self.nav_heading = None
-
-        self.squawk = None
-        self.gs = None
-        self.mach = None
-        self.roll = None
-
-        self.track = None
-        self.track_rate = None
-        self.mag_heading = None
-        self.true_heading = None
-
-        self.wd = None
-        self.ws = None
-        self.oat = None
-        self.tat = None
-
-        self.tas = None
-        self.ias = None
-        self.rc = None
-        self.messages = None
-
-        self.category = None
-        self.nic = None
-
-        self.nav_modes = None
-        self.emergency = None
-        self.type = None
-
-        self.airground = None
-        self.nav_altitude_src = None
-
-        self.sil_type = None
-        self.adsb_version = None
-        self.adsr_version = None
-        self.tisb_version = None
-
-        self.nac_p = None
-        self.nac_v = None
-
-        self.sil = None
-        self.gva = None
-        self.sda = None
-        self.nic_a = None
-        self.nic_c = None
-
-        self.flight = None
-        self.dbFlags = None
-        self.t = None
-        self.r = None
-
-        self.receiverCount = None
-        self.rssi = None
-        self.extraFlags = None
-        self.nogps = None
-
-        self.nic_baro = None
-        self.alert1 = None
-        self.spi = None
-        self.calc_track = None
-        self.version = None
-        self.rId = None
+    def __len__(self):
+        return len(str(self.to_list()))
 
     def to_dict(self) -> Dict[str, str]:
         return {
@@ -148,9 +153,11 @@ class Aircraft:
             'rId': str(self.rId),
         }
 
+    def __str__(self):
+        return str(self.to_dict())
+
 
 if __name__ == "__main__":
     print("Unit Test: Aircraft Class")
     ac = Aircraft()
-    print(ac.to_dict())
-    print(None)
+    print(ac)

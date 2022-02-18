@@ -39,12 +39,13 @@ class ServerConnection:
         if self.index_html.status_code >= 400:
             raise re.ConnectionError(
                 f"ServerConnection object could not connect to {server_URL}")
-        debug(f"Headers = {self.s.headers}")
 
     def make_cookie(self):
+        debug("making new cookie")
         from time import time
         from random import choices
         from string import ascii_lowercase
+        from urllib3.exceptions import HeaderParsingError
         sumbit_time_ms = int(time() * 1000)
 
         cookie_expire = str(sumbit_time_ms + 2*86400*1000)  # two days
@@ -68,11 +69,14 @@ class ServerConnection:
         }
         submit_cookie_to = server_URL + \
             '/globeRates.json?_=' + str(sumbit_time_ms)
-        r = re.get(submit_cookie_to, headers=new_cookie_head)
+        try:
+            r = re.get(submit_cookie_to, headers=new_cookie_head)
+        except HeaderParsingError:
+            debug(f'{submit_cookie_to} caused a HeaderParsingError (this is normal)')
 
         return cookie
 
-    def fetch_tile(self, index) -> re.models.Response:
+    def fetch_tile(self, index: str) -> re.models.Response:
         data_prefix = '/data/globe_'
         data_suffix = '.binCraft'
         r = self.s.get(server_URL + data_prefix + index + data_suffix)
@@ -87,15 +91,15 @@ class ServerConnection:
                     f"ServerConnection object could not connect to {server_URL}")
         return r
 
-    def fetch_tiles(self, indexes: List[str]) -> List[Aircraft]:
+    def pull_tiles(self, indexes: List[str]) -> List[Aircraft]:
         crafts = []
         for index in indexes:
-            t = self.fetch_tile(index)
-            crafts.extend(self.decode_response(t.content))
+            r = self.fetch_tile(index)
+            crafts.extend(self.decode_response(r))
             sleep(2)
         return crafts
 
-    def decode_response(self, data) -> List[Aircraft]:
+    def decode_response(self, data: re.models.Response) -> List[Aircraft]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
 
         Note that wherever byte transformations seem ambiguous, trust me, they were confusing to me too. This particular
@@ -111,7 +115,7 @@ class ServerConnection:
 
         import struct
         import math
-
+        data = data.content
         debug(f'len(data) = {len(data)}')
         # let vals = new Uint32Array(data.buffer, 0, 8)
         vals = struct.unpack_from('<8I', data, 0)
@@ -185,7 +189,7 @@ class ServerConnection:
             ac.rc = u16[30]
             ac.messages = u16[31]
 
-            ac.category = None if u8[64] else f'{int(u8[64],16):x}'.upper()
+            ac.category = None if not u8[64] else str(hex(int(u8[64]))).upper()
             ac.nic = u8[65]
 
             nav_modes = u8[66]
@@ -380,6 +384,25 @@ def get_map_info(conn):
 """
 
 if __name__ == "__main__":
+    import time
     basicConfig(format="%(message)s", level=DEBUG)
+
+    tic = time.perf_counter()
     conn = ServerConnection()
-    conn.fetch_region(["5988"])
+    toc = time.perf_counter()
+    print(f"created Connection object in {toc - tic:0.4f} seconds")
+
+    tic = time.perf_counter()
+    r = conn.fetch_tile("5988")
+    toc = time.perf_counter()
+    print(f"fetched tile in {toc - tic:0.4f} seconds")
+
+    tic = time.perf_counter()
+    acl = conn.decode_response(r)
+    toc = time.perf_counter()
+    print(f"decoded response in {toc - tic:0.4f} seconds")
+
+    print(f'NUMBER PLANES = {len(acl)}')
+    print(f'string example: {acl[0].to_list()}')
+    print(f'dict example: {acl[0].to_dict()}')
+    print(f'response = {[(ac.hex, ac.lat, ac.lon, len(ac)) for ac in acl]}')

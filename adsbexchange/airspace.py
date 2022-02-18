@@ -9,14 +9,16 @@ class Airspace():
         self.lon = lon
         self.radius = radius
         self.tiles = globe_indexes(self)
+        self.crafts = []
 
-    def update_region() -> None:
+    def update_region(self, conn) -> None:
         """Gets the most recent tile fetch from ServerConnection. If ServerConnection determines the tile "out of date", then ServerConnection will ping the server for an update
 
         Returns:
             None
         """
-        pass
+        for tile in self.tiles:
+            self.crafts.extend()
 
 
 # number of lat, long divisions per tile
