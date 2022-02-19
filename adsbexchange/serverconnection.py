@@ -1,10 +1,15 @@
 from re import L
 from time import sleep
 from typing import List
-from aircraft import Aircraft
+from adsbexchange.aircraft import Aircraft
 import regex as rx
 import requests as re
-from logging import basicConfig, DEBUG, debug, info, warning
+from logging import basicConfig, getLogger, debug, info, warning, DEBUG, CRITICAL
+
+# suppresses warnings during server request
+getLogger("requests").setLevel(CRITICAL)
+getLogger("urllib3").setLevel(CRITICAL)
+
 
 server_URL = 'https://globe.adsbexchange.com'
 # current time (ms, since 1970)
@@ -91,7 +96,7 @@ class ServerConnection:
                     f"ServerConnection object could not connect to {server_URL}")
         return r
 
-    def pull_tiles(self, indexes: List[str]) -> List[Aircraft]:
+    def fetch_tiles(self, indexes: List[str]) -> List[Aircraft]:
         crafts = []
         for index in indexes:
             r = self.fetch_tile(index)
