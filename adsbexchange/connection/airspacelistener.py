@@ -1,46 +1,52 @@
+from socket import timeout
 from threading import Thread, Semaphore
+from time import sleep
 from typing import List
 from requests.models import Response
-from multiprocessing import Pipe
+from multiprocessing import Queue
 import aircraft
 import airspace
 import requests as re
 from . import serverconnection
 from . import serverclient
+from persistence import sql
+
 
 class AirspaceListener:
 
     def __init__(self, conn: serverconnection.ServerConnection):
-        self.airspaces : List[airspace.Airspace] = []
+        self.airspaces: List[airspace.Airspace] = []
+        self.sql = sql.SQLite3()
         self.conn = conn
-        (self.r, self.w) = Pipe(duplex=True)
+        self.r = Queue()
+        self.w = Queue()
+        #(self.r, self.w) = Pipe(duplex=True)
         self.num_airspaces = Semaphore(0)
-        self.p_server_client = serverclient.ServerClient(self.conn.sess, self.r)
+        self.p_server_client = serverclient.ServerClient(
+            self.conn.sess, self.r, self.w)
         self.p_server_client.start()
         self.t_run = Thread(target=self.run)
         self.t_run.start()
-        
+
     def run(self):
         data_prefix = '/data/globe_'
         data_suffix = '.binCraft'
         last_airspace_index = 0
         while True:
-            self.num_airspaces.acquire() # thread waits if there are no airspaces
+            self.num_airspaces.acquire()  # thread waits when there are no airspaces
             self.num_airspaces.release()
-            next_airspcae = self.airspaces[last_airspace_index]
             last_airspace_index += 1
             last_airspace_index %= len(self.airspaces)
+            next_airspace = self.airspaces[last_airspace_index]
 
-            for tile in next_airspcae.tiles:
-                self.w.send(data_prefix + str(tile[0]) + data_suffix)
-
+            for tile in next_airspace.tiles:
+                self.r.put(data_prefix + str(tile[0]) + data_suffix)
             aircrafts: List[airspace.Aircraft] = []
-            for tile in next_airspcae.tiles:
-                r = self.w.recv()
+            for tile in next_airspace.tiles:
+                r = self.w.get()
                 aircrafts.extend(self.decode_tile(r))
-                print(aircrafts)
-
-
+            
+            self.sql.add_buffer(aircrafts)
 
     def add_airspace(self, airspace: airspace.Airspace):
         if airspace in self.airspaces:
@@ -56,10 +62,9 @@ class AirspaceListener:
             index = self.airspaces.index(airspace)
             self.airspaces.pop(index)
             self.num_airspaces.acquire()
-    
+
     def kill_client(self):
         self.server_client.kill()
-
 
     def decode_tile(self, data: re.models.Response) -> List[aircraft.Aircraft]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
@@ -192,24 +197,26 @@ class AirspaceListener:
 
             ac.extraFlags = u8[106]
             ac.nogps = ac.extraFlags and 1
+            gps = u8[73]
             if ac.nogps:
-                u8[73] |= 64
-                u8[73] |= 16
+                gps |= 64
+                gps |= 16
+
 
             # must come after the stuff above (validity bits)
 
-            ac.nic_baro = (u8[73] & 1)
-            ac.alert1 = (u8[73] & 2)
-            ac.spi = (u8[73] & 4)
-            ac.flight = ac.flight if (u8[73] & 8) else None
-            ac.alt_baro = ac.alt_baro if (u8[73] & 16) else None
-            ac.alt_geom = ac.alt_geom if (u8[73] & 32) else None
+            ac.nic_baro = (gps & 1)
+            ac.alert1 = (gps & 2)
+            ac.spi = (gps & 4)
+            ac.flight = ac.flight if (gps & 8) else None
+            ac.alt_baro = ac.alt_baro if (gps & 16) else None
+            ac.alt_geom = ac.alt_geom if (gps & 32) else None
 
-            ac.lat = ac.lat if (u8[73] & 64) else None
-            ac.lon = ac.lon if (u8[73] & 64) else None
-            ac.seen_pos = ac.seen_pos if (u8[73] & 64) else None
+            ac.lat = ac.lat if (gps & 64) else None
+            ac.lon = ac.lon if (gps & 64) else None
+            ac.seen_pos = ac.seen_pos if (gps & 64) else None
 
-            ac.gs = ac.gs if (u8[73] & 128) else None
+            ac.gs = ac.gs if (gps & 128) else None
 
             ac.ias = ac.ias if (u8[74] & 1) else None
             ac.tas = ac.tas if (u8[74] & 2) else None
@@ -326,6 +333,7 @@ def enque_tiles(l: AirspaceListener):
             l.waiting_tiles.append(path)
             l.w.send(path)
     return
+
 
 if __name__ == "__main__":
     pass

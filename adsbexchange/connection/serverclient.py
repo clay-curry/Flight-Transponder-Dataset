@@ -1,7 +1,6 @@
-from multiprocessing.connection import Connection
 from socket import timeout
 from typing import List
-from multiprocessing import Process, Queue, synchronize
+from multiprocessing import Process, Queue, Semaphore
 
 from threading import Thread, Timer
 from requests.models import Response
@@ -13,7 +12,7 @@ server_URL = serverconnection.server_URL
 header_conf = serverconnection.header_conf
 
 max_simultaneous_requests = 8
-elapse_between_requests = 1.6  # seconds
+elapse_between_requests = 1.8  # seconds
 
 
 class ServerClient(Process):
@@ -34,21 +33,22 @@ class ServerClient(Process):
     """
     # IO Bound Process
 
-    def __init__(self, sess: re.Session, conn: Connection):
+    def __init__(self, sess: re.Session, paths: Queue, requests: Queue):
         Process.__init__(self, group=None)
         self.sess = sess           # cookies and other headers
-        self.conn = conn   # contains paths
+        self.paths = paths   # contains paths
+        self.requests = requests
         self.last_request = time()  # avoid HTTP 429 error
         self.request_queue = []
 
     def run(self):
         while True:
             try:
-                if len(self.request_queue) == 0:
-                    self.request_queue.append(self.conn.recv())
+                while (self.paths.empty()):
+                    sleep(.1)
 
-                while (self.conn.poll()):
-                    self.request_queue.append(self.conn.recv())
+                while (not self.paths.empty()):
+                    self.request_queue.append(self.paths.get())
 
                 # avoid Too Many Requests (HTTP 429) error
                 while (self.last_request + elapse_between_requests) > time():
@@ -76,7 +76,7 @@ class ServerClient(Process):
 
     def request(self, path) -> Response:
         r = self.sess.get(url=server_URL + path)
-        self.conn.send(r)
+        self.requests.put(r)
         return r
 
     def kill_myself(self):
