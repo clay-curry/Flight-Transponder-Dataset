@@ -1,110 +1,67 @@
-from re import L
-from time import sleep
+from threading import Thread, Semaphore
 from typing import List
-from adsbexchange.aircraft import Aircraft
-import regex as rx
+from requests.models import Response
+from multiprocessing import Pipe
+import aircraft
+import airspace
 import requests as re
-from logging import basicConfig, getLogger, debug, info, warning, DEBUG, CRITICAL
+from . import serverconnection
+from . import serverclient
 
-# suppresses warnings during server request
-getLogger("requests").setLevel(CRITICAL)
-getLogger("urllib3").setLevel(CRITICAL)
+class AirspaceListener:
 
-
-server_URL = 'https://globe.adsbexchange.com'
-# current time (ms, since 1970)
-header_conf = {
-    "accept": "*/*",
-    "accept-language": "en-US,en;q=0.9",
-    "if-none-match": "\"620589bd-21b8\"",
-    "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"98\", \"Google Chrome\";v=\"98\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "x-requested-with": "XMLHttpRequest",
-    "Referer": "https://globe.adsbexchange.com/?disable_fi=1",
-    "Referrer-Policy": "strict-origin-when-cross-origin"
-}
-
-
-class ServerConnection:
-    """Establishes a connection with adsbexchange.com, a crowd-source depository of real-time ADS-B signals
-    being actively broadcasted around the globe.
-    """
-
-    def __init__(self):
-        self.s = re.Session()
-        self.s.headers = header_conf
-        self.s.headers['cookie'] = self.make_cookie()
-
-        self.index_html = self.s.get(server_URL)
-        debug(f'{server_URL} returned with status {self.index_html.status_code}')
-        if self.index_html.status_code >= 400:
-            raise re.ConnectionError(
-                f"ServerConnection object could not connect to {server_URL}")
-
-    def make_cookie(self):
-        debug("making new cookie")
-        from time import time
-        from random import choices
-        from string import ascii_lowercase
-        from urllib3.exceptions import HeaderParsingError
-        sumbit_time_ms = int(time() * 1000)
-
-        cookie_expire = str(sumbit_time_ms + 2*86400*1000)  # two days
-        cookie_token = '_' + \
-            ''.join(choices(ascii_lowercase + '1234567890', k=11))
-        cookie = 'adsbx_sid=' + cookie_expire + cookie_token
-
-        new_cookie_head = {
-            "accept": "application/json, text/javascript, */*; q=0.01",
-            "accept-language": "en-US,en;q=0.9",
-            "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"98\", \"Google Chrome\";v=\"98\"",
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": "\"Windows\"",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "x-requested-with": "XMLHttpRequest",
-            "cookie":   cookie,
-            "Referer": "https://globe.adsbexchange.com/?disable_fi=1",
-            "Referrer-Policy": "strict-origin-when-cross-origin"
-        }
-        submit_cookie_to = server_URL + \
-            '/globeRates.json?_=' + str(sumbit_time_ms)
-        try:
-            r = re.get(submit_cookie_to, headers=new_cookie_head)
-        except HeaderParsingError:
-            debug(f'{submit_cookie_to} caused a HeaderParsingError (this is normal)')
-
-        return cookie
-
-    def fetch_tile(self, index: str) -> re.models.Response:
+    def __init__(self, conn: serverconnection.ServerConnection):
+        self.airspaces : List[airspace.Airspace] = []
+        self.conn = conn
+        (self.r, self.w) = Pipe(duplex=True)
+        self.num_airspaces = Semaphore(0)
+        self.p_server_client = serverclient.ServerClient(self.conn.sess, self.r)
+        self.p_server_client.start()
+        self.t_run = Thread(target=self.run)
+        self.t_run.start()
+        
+    def run(self):
         data_prefix = '/data/globe_'
         data_suffix = '.binCraft'
-        r = self.s.get(server_URL + data_prefix + index + data_suffix)
-        if r.status_code >= 400:
-            warning(
-                f'fetch_time{ index } returned with status code {r.status_code}. Trying again with a new cookie in 3 seconds.')
-            self.s.headers['cookie'] = self.make_cookie()
-            sleep(3)
-            r = self.s.get(server_URL + data_prefix + index + data_suffix)
-            if r.status_code >= 400:
-                raise re.ConnectionError(
-                    f"ServerConnection object could not connect to {server_URL}")
-        return r
+        last_airspace_index = 0
+        while True:
+            self.num_airspaces.acquire() # thread waits if there are no airspaces
+            self.num_airspaces.release()
+            next_airspcae = self.airspaces[last_airspace_index]
+            last_airspace_index += 1
+            last_airspace_index %= len(self.airspaces)
 
-    def fetch_tiles(self, indexes: List[str]) -> List[Aircraft]:
-        crafts = []
-        for index in indexes:
-            r = self.fetch_tile(index)
-            crafts.extend(self.decode_response(r))
-            sleep(2)
-        return crafts
+            for tile in next_airspcae.tiles:
+                self.w.send(data_prefix + str(tile[0]) + data_suffix)
 
-    def decode_response(self, data: re.models.Response) -> List[Aircraft]:
+            aircrafts: List[airspace.Aircraft] = []
+            for tile in next_airspcae.tiles:
+                r = self.w.recv()
+                aircrafts.extend(self.decode_tile(r))
+                print(aircrafts)
+
+
+
+    def add_airspace(self, airspace: airspace.Airspace):
+        if airspace in self.airspaces:
+            return
+        else:
+            self.airspaces.append(airspace)
+            self.num_airspaces.release()
+
+    def remove_airspace(self, airspace: airspace.Airspace):
+        if airspace not in self.airspaces:
+            return
+        else:
+            index = self.airspaces.index(airspace)
+            self.airspaces.pop(index)
+            self.num_airspaces.acquire()
+    
+    def kill_client(self):
+        self.server_client.kill()
+
+
+    def decode_tile(self, data: re.models.Response) -> List[aircraft.Aircraft]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
 
         Note that wherever byte transformations seem ambiguous, trust me, they were confusing to me too. This particular
@@ -121,7 +78,6 @@ class ServerConnection:
         import struct
         import math
         data = data.content
-        debug(f'len(data) = {len(data)}')
         # let vals = new Uint32Array(data.buffer, 0, 8)
         vals = struct.unpack_from('<8I', data, 0)
 
@@ -136,20 +92,10 @@ class ServerConnection:
         east = limits[3]
         messages = vals[7]
 
-        debug(f'now = {now}')
-        debug(f'stride = {stride}')
-        debug(f'global_ac_count_withpos = {global_ac_count_withpos}')
-        debug(f'globeIndex = {globeIndex}')
-        debug(f'south = {south}')
-        debug(f'west = {west}')
-        debug(f'north = {north}')
-        debug(f'east = {east}')
-        debug(f'messages = {messages}')
-
         # 1. The allows for types to be encapsulated
-        aircraft = []
+        aircrafts = []
         for off in range(stride, len(data), stride):
-            ac = Aircraft()
+            ac = aircraft.Aircraft()
             u32 = struct.unpack_from(f'<{int(stride/4)}I', data, off)
             s32 = struct.unpack_from(f'<{int(stride/4)}i', data, off)
             u16 = struct.unpack_from(f'<{int(stride/2)}H', data, off)
@@ -363,51 +309,23 @@ class ServerConnection:
                 part2 = f'{u32[27]:08x}'
                 ac.rId = part2[0:4] + '-' + part2[4]
 
-            aircraft.append(ac)
+            aircrafts.append(ac)
 
-        return aircraft
+        return aircrafts
 
 
-"""
-def get_map_info(conn):
-    global server_URL
-    # retrieve attributes needed to find map tiles
-    lib_URL_pattern = rx.compile(r'libs_.*?\.js')
-    map_attributes_pattern = rx.compile(
-        r"(?<=let data = JSON.parse\('){.*?}(?='\);)")
+def enque_tiles(l: AirspaceListener):
+    data_prefix = '/data/globe_'
+    data_suffix = '.binCraft'
 
-    lib_URL = lib_URL_pattern.search(conn.index_html.text).group(0)
-    map_attributes = map_attributes_pattern.search(
-        re.get(server_URL + lib_URL).text).group(0)
-    from json import loads
-    attributes = loads(map_attributes)
-    from adsbexchange import refresh_miliseconds
-    refresh_miliseconds = attributes['refresh']
-    from region import globeIndexGrid, globeIndexSpecialTiles
-    globeIndexGrid = attributes['globeIndexGrid']
-    globeIndexSpecialTiles = attributes['globeIndexSpecialTiles']
-"""
+    for tile in l.next_airspace_tiles:
+        if l.max_tiles.locked():
+            return
+        path = '/data/globe_' + tile + '.binCraft'
+        if path not in l.waiting_tiles:
+            l.waiting_tiles.append(path)
+            l.w.send(path)
+    return
 
 if __name__ == "__main__":
-    import time
-    basicConfig(format="%(message)s", level=DEBUG)
-
-    tic = time.perf_counter()
-    conn = ServerConnection()
-    toc = time.perf_counter()
-    print(f"created Connection object in {toc - tic:0.4f} seconds")
-
-    tic = time.perf_counter()
-    r = conn.fetch_tile("5988")
-    toc = time.perf_counter()
-    print(f"fetched tile in {toc - tic:0.4f} seconds")
-
-    tic = time.perf_counter()
-    acl = conn.decode_response(r)
-    toc = time.perf_counter()
-    print(f"decoded response in {toc - tic:0.4f} seconds")
-
-    print(f'NUMBER PLANES = {len(acl)}')
-    print(f'string example: {acl[0].to_list()}')
-    print(f'dict example: {acl[0].to_dict()}')
-    print(f'response = {[(ac.hex, ac.lat, ac.lon, len(ac)) for ac in acl]}')
+    pass

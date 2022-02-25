@@ -1,6 +1,6 @@
-from adsbexchange.serverconnection import ServerConnection
-from adsbexchange.airspace import Airspace
-from adsbexchange.aircraft import Aircraft
+from connection.serverconnection import ServerConnection
+from airspace import Airspace
+from aircraft import Aircraft
 from typing import List
 
 
