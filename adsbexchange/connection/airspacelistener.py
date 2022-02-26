@@ -2,14 +2,14 @@ from socket import timeout
 from threading import Thread, Semaphore
 from time import sleep
 from typing import List
+import requests as re
 from requests.models import Response
 from multiprocessing import Queue
-import aircraft
-import airspace
-import requests as re
+from ..datum import aircraft
+from ..datum import airspace
 from . import serverconnection
 from . import serverclient
-from persistence import sql
+from ..persistence import sql
 
 
 class AirspaceListener:

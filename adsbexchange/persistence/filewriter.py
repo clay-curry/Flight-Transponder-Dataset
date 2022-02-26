@@ -1,9 +1,9 @@
 import json
 import os
-import aircraft
+import adsbexchange.datum.aircraft as aircraft
 import zlib
 import multiprocessing
-import airspace as airspace
+import adsbexchange.datum.airspace as airspace
 
 
 output_dir = str(os.path.dirname(f"{__file__}")) + "/track_data"

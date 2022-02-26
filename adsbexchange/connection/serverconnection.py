@@ -1,6 +1,6 @@
 import requests as re
 from logging import basicConfig, getLogger, debug, info, DEBUG, CRITICAL
-from airspace import Airspace
+from ..datum.airspace import Airspace
 
 # suppresses warnings during server request
 getLogger("requests").setLevel(CRITICAL)
@@ -88,8 +88,8 @@ class ServerConnection:
         return s
 
 
-from connection.airspacelistener import AirspaceListener
-from connection.serverclient import ServerClient
+from .airspacelistener import AirspaceListener
+from .serverclient import ServerClient
 
 
 if __name__ == "__main__":

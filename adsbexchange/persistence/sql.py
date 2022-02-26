@@ -1,7 +1,7 @@
 from typing import List
 import sys
 import sqlalchemy
-from aircraft import Aircraft
+from adsbexchange.datum.aircraft import Aircraft
 
 in_memory: List[Aircraft] = []
 memory_limit = 0

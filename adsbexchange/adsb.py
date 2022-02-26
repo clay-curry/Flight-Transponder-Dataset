@@ -1,6 +1,6 @@
-from connection.serverconnection import ServerConnection
-from airspace import Airspace
-from aircraft import Aircraft
+from .connection.serverconnection import ServerConnection
+from .datum.airspace import Airspace
+from .datum.aircraft import Aircraft
 from typing import List
 
 
