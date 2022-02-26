@@ -1,9 +1,9 @@
 import json
 import os
-import aircraft
+import datum.aircraft as aircraft
 import zlib
 import multiprocessing
-import airspace as airspace
+import datum.airspace as airspace
 
 
 output_dir = str(os.path.dirname(f"{__file__}")) + "/track_data"

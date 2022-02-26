@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Attach using Process Id",
+            "name": "Python: Module",
             "type": "python",
-            "request": "attach",
-            "processId": "${command:pickProcess}"
+            "request": "launch",
+            "module": "/home/clayc/src/Data-Mining/main.py"
         }
     ]
 }

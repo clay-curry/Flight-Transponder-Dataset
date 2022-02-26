@@ -4,10 +4,11 @@ from logging import DEBUG, debug
 
 
 class Airspace():
-    def __init__(self, lat, lon, radius):
-        self.lat = lat
-        self.lon = lon
-        self.radius = radius
+    def __init__(self, lat1, lon1, lat2, lon2):
+        self.lat1 = lat1
+        self.lon1 = lon1
+        self.lat2 = lat2
+        self.lon2 = lon2
         self.tiles = globe_indexes(self)
         self.crafts = []
 
@@ -32,24 +33,11 @@ def globe_indexes(region) -> List[str]:
     # Distances are measured in miles.
     # Longitudes and latitudes are measured in degrees.
     # Earth is assumed to be perfectly spherical.
-    earth_radius = 3960.0
-    degrees_to_radians = pi/180.0
-    radians_to_degrees = 180.0/pi
 
-    def change_in_latitude(miles):
-        "Given a distance north, return the change in latitude."
-        return (miles/earth_radius)*radians_to_degrees
-
-    def change_in_longitude(latitude, miles):
-        "Given a latitude and a distance west, return the change in longitude."
-        # Find the radius of a circle around the earth at given latitude.
-        r = earth_radius*cos(latitude*degrees_to_radians)
-        return (miles/r)*radians_to_degrees
-
-    x1 = floor(region.lon - change_in_longitude(region.lat, region.radius))
-    x2 = ceil(region.lon + change_in_longitude(region.lat, region.radius))
-    y1 = floor(region.lat - change_in_latitude(region.radius))
-    y2 = ceil(region.lat + change_in_latitude(region.radius))
+    x1 = floor(region.lon1)
+    x2 = ceil(region.lon2)
+    y1 = floor(region.lat1)
+    y2 = ceil(region.lat2)
 
     x2 = x2 if x2 < 179 else 179
     x1 = x1 if x1 > -179 else -179

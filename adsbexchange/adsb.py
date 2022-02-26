@@ -1,11 +1,8 @@
-from connection.serverconnection import ServerConnection
-from airspace import Airspace
-from aircraft import Aircraft
 from typing import List
-
+from .connection.serverconnection import ServerConnection
+from .datum.airspace import Airspace
 
 refresh_miliseconds = -1
-tracked_regions = []
 
 
 class Adsbexchange:
@@ -13,8 +10,14 @@ class Adsbexchange:
         if start:
             self.conn = ServerConnection()
 
-    def fetch_region():
-        pass
+    def add_airspace(self, airspace: Airspace):
+        self.conn.add_airspace(airspace)
+            
+    def remove_airspace(self, airspace: Airspace):
+        self.conn.remove_airspace(airspace)
+    
+    def list_airspaces(self):
+        return self.conn.list_airspaces()
 
 
 if __name__ == "__main__":
