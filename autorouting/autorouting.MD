@@ -9,5 +9,3 @@ Transform features into human explainations
     - attention mechanisms provide information for human abstraction
         -> AMs feed to a NLP
     - novelty detection should be communicated with human operator
- 
- Lacey in Office: Wed + Fri

@@ -1,11 +1,14 @@
 from .adsb import Adsbexchange
 from .persistence.airspace import Airspace
 
-adsb = None
+adsb : Adsbexchange
 
 def start():
+    """
+    Note: The UI half of this application is, at the moment, entirely unimplemented.
+    """
     global adsb
-    adsb = Adsbexchange(start=False)
+    adsb = Adsbexchange(start=True)
     print("====================================")
     print("STARTING ADS-B SCRAPER")
 
@@ -18,6 +21,9 @@ def start():
         print("[2] - Manage airspaces")
         print("[3] - Manage flight tracks")
         print("[4] - Manage recording")
+        sample = Airspace(lat1=25, lon1=-108, lat2=40, lon2=-92)
+        print(sample.tiles)
+        adsb.add_airspace(sample)
 
         user_resp = get_resp()
         if user_resp == 0:
@@ -129,8 +135,12 @@ def manage_recording():
         if user_resp == 0:
             return
         elif user_resp == 1:
-            print("[1] - start/stop recording")
-            print("[2] - new recording")
+            print("[1] - start recording")
+            print('[2] - stop recording')  
+            user_resp = get_resp()
+            if user_resp == 1:
+               pass
+
         elif user_resp == 2:
             print("[1] - start/stop recording")
             print("[2] - new recording")

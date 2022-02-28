@@ -1,7 +1,10 @@
 from typing import Dict, List
 
+from sqlalchemy import Column, Integer, String
 
-class Aircraft:
+class AircraftWaypoint:
+    """E
+    """
     def __init__(self):
         self.hex = self.seen_pos = self.seen = None
         self.lon = self.lat = None
@@ -159,5 +162,5 @@ class Aircraft:
 
 if __name__ == "__main__":
     print("Unit Test: Aircraft Class")
-    ac = Aircraft()
+    ac = AircraftWaypoint()
     print(ac)

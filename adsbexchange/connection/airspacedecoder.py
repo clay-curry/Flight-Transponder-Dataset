@@ -11,7 +11,7 @@ from ..persistence.aircraft import AircraftWaypoint
 from .sql import SQLite3
 
 
-
+# CPU Bound Process
 class AirspaceDecoder(Process):
 
     def __init__(self, requests: Queue, start_decoding, waypoints: Queue, start_writing):

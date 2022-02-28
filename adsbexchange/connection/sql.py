@@ -6,6 +6,7 @@ from ..persistence.aircraft import AircraftWaypoint
 in_memory: List[AircraftWaypoint] = []
 memory_limit = 0
 
+# CPU Bound Process
 class SQLite3:
     def __init__(self) -> None:
         self.in_memory: List[AircraftWaypoint] = []

@@ -3,7 +3,7 @@ from adsbexchange.app import start
 if __name__ == "__main__":
     # start()
     from adsbexchange.connection.serverconnection import ServerConnection
-    from adsbexchange.datum.airspace import Airspace
+    from adsbexchange.persistence.airspace import Airspace
     air_sp = Airspace(35.222569, -97.439476, 200)
     conn = ServerConnection()
     conn.add_airspace(air_sp)
