@@ -31,13 +31,6 @@ class AirspaceDecoder(Process):
                 waypoints.extend(self.decode_tile(r))
             self.start_writing.release()
             self.waypoints.put(waypoints)
-            
-            
-
-
-    def kill_myself(self):
-        # the server stopped responding to me so my life is meaningless
-        self.kill()
 
     def decode_tile(self, data: re.models.Response) -> List[AircraftWaypoint]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.

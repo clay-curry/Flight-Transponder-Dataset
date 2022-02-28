@@ -18,12 +18,11 @@ header_conf = connection.header_conf
 class AirspaceListener:
 
     def __init__(self, conn: serverconnection.ServerConnection):
-        self.airspaces: List[Airspace] = []
-        self.sql = SQLite3()
         self.conn = conn
         self.r = Queue()
         self.w = Queue()
-        #(self.r, self.w) = Pipe(duplex=True)
+        self.airspaces: List[Airspace] = []
+    
         self.num_airspaces = Semaphore(0)
         self.p_server_client = ServerClient(
             self.conn.sess, self.r, self.w)
