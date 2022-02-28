@@ -4,23 +4,22 @@ from logging import DEBUG, debug
 
 
 class Airspace():
+    def __init__(self, tiles):
+        self.lat1 = 0
+        self.lon1 = 0
+        self.lat2 = 0
+        self.lon2 = 0
+        self.tiles = tiles
+
+    """
     def __init__(self, lat1, lon1, lat2, lon2):
         self.lat1 = lat1
         self.lon1 = lon1
         self.lat2 = lat2
         self.lon2 = lon2
         self.tiles = globe_indexes(self)
-        self.crafts = []
-
-    def update_region(self, conn) -> None:
-        """Gets the most recent tile fetch from ServerConnection. If ServerConnection determines the tile "out of date", then ServerConnection will ping the server for an update
-
-        Returns:
-            None
-        """
-        for tile in self.tiles:
-            self.crafts.extend()
-
+    """
+    
 
 # number of lat, long divisions per tile
 globeIndexGrid = 3
@@ -104,7 +103,7 @@ def globe_index(lat, lon) -> int:
             globeIndexCached[f"{defaultIndex}"] = index = defaultIndex
     debug(
         f'lat: ({lat}, {lat + grid}) lon: ({lon}, {lon + grid}) index: {index}')
-    return index, (lat, lat+grid), (lon, lon+grid)
+    return index
 
 
 if __name__ == "__main__":

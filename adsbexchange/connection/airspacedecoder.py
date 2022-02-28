@@ -1,36 +1,25 @@
 from multiprocessing import Process
-from socket import timeout
-from threading import Thread, Semaphore
-from time import sleep
 from typing import List
 import requests as re
-from requests.models import Response
 from multiprocessing import Queue
-from ..persistence.airspace import Airspace
 from ..persistence.aircraft import AircraftWaypoint
-from .sql import SQLite3
-
 
 # CPU Bound Process
 class AirspaceDecoder(Process):
 
-    def __init__(self, requests: Queue, start_decoding, waypoints: Queue, start_writing):
+    def __init__(self, decode_queue: Queue, database_queue: Queue):
         Process.__init__(self)
-        self.airspaces: List[Airspace] = []
-        self.requests = requests
-        self.start_decoding = start_decoding
-        self.waypoints = waypoints
-        self.start_writing = start_writing
-        self.start_writing.acquire() 
+        self.decode_queue = decode_queue
+        self.database_queue = database_queue
                
     def run(self):
         waypoints: List[AircraftWaypoint] = []
         while True:
-            self.start_decoding.acquire()
-            for r in self.requests.get():
-                waypoints.extend(self.decode_tile(r))
-            self.start_writing.release()
-            self.waypoints.put(waypoints)
+            requests = self.decode_queue.get(block=True)
+            for request in requests:
+                waypoints.extend(self.decode_tile(request))
+            self.database_queue.put(waypoints)
+            waypoints = []
 
     def decode_tile(self, data: re.models.Response) -> List[AircraftWaypoint]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.

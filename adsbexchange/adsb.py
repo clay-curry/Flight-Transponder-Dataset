@@ -21,5 +21,4 @@ class Adsbexchange:
 
 
 if __name__ == "__main__":
-    adsb = Adsbexchange(start=True)
-    adsb.conn.fetch_tiles(indexes=['5988'])
+    print("hi")

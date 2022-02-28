@@ -1,4 +1,7 @@
+from http import server
+import imp
 import sqlite3
+from wsgiref.simple_server import server_version
 import requests as re
 from multiprocessing import Semaphore, Queue
 from logging import basicConfig, getLogger, debug, info, DEBUG, CRITICAL
@@ -15,17 +18,17 @@ getLogger("urllib3").setLevel(CRITICAL)
 
 tracked_airspaces: List[Airspace] = []
 cache_max = 1000000
-
 server_URL = connection.server_URL
 header_conf = connection.header_conf
+
 
 class ServerConnection:
     """Establishes a connection with adsbexchange.com, a crowd-source depository of real-time ADS-B signals
     being actively broadcasted around the globe.
     """
     def __init__(self):
-        self.sess = self.new_session()
-        self.index_html = self.sess.get(server_URL)
+        self.session = self.new_session()
+        self.index_html = self.session.get(server_URL)
         info(f'{server_URL} returned with status {self.index_html.status_code}')
         if self.index_html.status_code >= 400:
             raise re.ConnectionError(
@@ -35,38 +38,39 @@ class ServerConnection:
         self.make_airspace_recorder()
     
     def make_airspace_recorder(self):
-        self.start_recording = Semaphore(0)
-        start_decoding = Semaphore()
-        start_writing = Semaphore()
-        requests = Queue()
-        waypoints = Queue()
-        self.add_airspace_queue = Queue()
-        self.remove_airspace_queue = Queue()
-        self.p_listener = AirspaceListener(self.sess,requests,self.start_recording,start_decoding,self.add_airspace_queue,self.remove_airspace_queue)
+        self.main_queue = Queue()
+        decode_queue    = Queue()
+        database_queue  = Queue()
+        self.p_listener = AirspaceListener(self.session, self.main_queue, decode_queue)
         self.p_listener.start()
-        self.p_decoder = AirspaceDecoder(requests,start_decoding,waypoints,start_writing)
+        
+        self.p_decoder  = AirspaceDecoder(decode_queue, database_queue)
         self.p_decoder.start()
-        self.p_database = SQLite3(cache_max,waypoints,start_writing,True)
+        
+        self.p_database = SQLite3(database_queue)
         self.p_database.start()
-        for airspace in tracked_airspaces:
-            self.add_airspace_queue.put(airspace)
-            self.start_recording.release()
+        
 
-         
+    def get_children(self):
+        return self.p_listener, self.p_decoder, self.p_database
+    
     def add_airspace(self, airspace: Airspace):
         if airspace in tracked_airspaces:
             return
         else:
             tracked_airspaces.append(airspace)
-            self.add_airspace_queue.put(airspace)
-            self.start_recording.release()
+            self.main_queue.put('ADD')
+            self.main_queue.put(airspace)
+            self.main_queue.put('DONE')
             
     def remove_airspace(self, airspace: Airspace):
         if airspace not in self.airspaces:
             return
         else:
-            self.remove_airspace_queue.put(airspace)
-            self.start_recording.acquire()
+            self.main_queue.put('DELETE')
+            self.main_queue.put(airspace)
+            self.main_queue.put('DONE')
+            
     
     def list_airspaces(self):
         return self.p_listener.airspaces.copy()
@@ -76,6 +80,12 @@ class ServerConnection:
         self.p_decoder.kill()
         self.p_database.kill()
         self.make_airspace_recorder()
+        if len(tracked_airspaces) > 0:
+            self.main_queue.put('ADD')
+            for airspace in tracked_airspaces:
+                self.main_queue.put(airspace)
+            self.main_queue.put('DONE')
+        
         
 
     def new_session(self) -> re.Session:
@@ -121,25 +131,5 @@ class ServerConnection:
 
 
 if __name__ == "__main__":
-    import time
-    basicConfig(format="%(message)s", level=DEBUG)
-
-    tic = time.perf_counter()
+    import sys
     conn = ServerConnection()
-    toc = time.perf_counter()
-    print(f"created Connection object in {toc - tic:0.4f} seconds")
-
-    tic = time.perf_counter()
-    r = conn.fetch_tile("5988")
-    toc = time.perf_counter()
-    print(f"fetched tile in {toc - tic:0.4f} seconds")
-
-    tic = time.perf_counter()
-    acl = conn.decode_response(r)
-    toc = time.perf_counter()
-    print(f"decoded response in {toc - tic:0.4f} seconds")
-
-    print(f'NUMBER PLANES = {len(acl)}')
-    print(f'string example: {acl[0].to_list()}')
-    print(f'dict example: {acl[0].to_dict()}')
-    print(f'response = {[(ac.hex, ac.lat, ac.lon, len(ac)) for ac in acl]}')

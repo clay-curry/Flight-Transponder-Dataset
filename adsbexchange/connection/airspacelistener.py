@@ -1,20 +1,21 @@
-from socket import timeout
-from typing import List
-from multiprocessing import Process, Semaphore, Queue
-from threading import Thread, Timer
+from typing import List, Dict
+from multiprocessing import Process, Queue
+import queue
+from threading import Thread
 from requests.models import Response
 import requests as re
+import regex as rx
 from time import time, sleep
-
-from . import serverconnection
 from ..persistence.airspace import Airspace
 from adsbexchange import connection
+from math import ceil
+
 server_URL = connection.server_URL
 header_conf = connection.header_conf
 
 
 max_simultaneous_requests = 8
-elapse_between_requests = 1.8  # seconds
+seconds_between_requests = .5  # seconds
 
 
 class AirspaceListener(Process):
@@ -35,55 +36,102 @@ class AirspaceListener(Process):
     """
     # IO Bound Process
 
-    def __init__(self, session: re.Session, requests: Queue, start_recording,start_decoding,add_airspace_queue,remove_airspace_queue):
+    def __init__(self, session: re.Session, main_queue: Queue, decode_queue: Queue):
         Process.__init__(self)
-        self.airspaces: List[Airspace] = []
-        self.last_request = time()  # avoid HTTP 429 error
-        self.session = session           # cookies and other headers
-        self.requests = requests
-        self.start_recording = start_recording
-        self.start_decoding = start_decoding
-        self.start_decoding.acquire() # avoid racing condition with decoder
-        self.add_airspace_queue = add_airspace_queue
-        self.remove_airspace_queue = remove_airspace_queue
+        self.tracked_airspaces: List[Airspace]  = []
+        self.tracked_tiles: Dict[int, int] = {}
+        self.last_request               = 0
+        self.session                    = session
+        self.main_queue                 = main_queue
+        self.decode_queue               = decode_queue
+        self.max_simultaneous = 8
         
     def run(self):
         index = 0
+        self.request_queue              = queue.Queue()   
+        
         while True:
             try:
-                self.start_recording.acquire()
-                self.start_recording.release()
-                while not self.remove_airspace_queue.empty():
-                    i = self.airspaces.index(self.remove_airspace_queue.get())
-                    self.airspaces.pop(i)
-                while not self.add_airspace_queue.empty():
-                    self.airspaces.append(self.add_airspace_queue.get())
-                request_queue = self.airspaces[index].tiles
-                index += 1
-                index %= len(self.airspaces)
-                # avoid Too Many Requests (HTTP 429) error
-                while (self.last_request + elapse_between_requests) > time():
-                    sleep(0.2)
-                self.last_request = time()
+                m = None
+                m = self.main_queue.get(block=(len(self.tracked_tiles) == 0))
+                if m == "ADD":
+                    self.add_airspaces()
+                elif m == "DELETE":
+                    self.delete_airspaces()
+                elif m == 'KILL':
+                    self.kill_myself()
+            except queue.Empty:
+                self.update_tiles()
+               
+                    
 
-                #t = Timer(20)    # server timeout
-                threads = []
-                for r in request_queue:
-                    crawler = Thread(target=self.request, args=(r[0],))
-                    crawler.start()
-                    threads.append(crawler)
-                for crawler in threads:
-                    crawler.join()
-                self.start_decoding.release() # "start decoding" semaphore
-                #t.cancel()
+    def update_tiles(self):
+        errors = []
+        class RequestThread(Thread):
+            def __init__(self, session: re.Session, tile_index: int):
+                Thread.__init__(self)
+                self.session = session
+                self.tile_index = tile_index
+                self._return = None
+            def run(self):
+                data_prefix = '/data/globe_'
+                data_suffix = '.binCraft'
+                url = server_URL + data_prefix + str(self.tile_index).zfill(4) + data_suffix
+                self._return = self.session.get(url=url)         
+            def join(self):
+                Thread.join(self)
+                return self._return
+        
+        tiles = list(self.tracked_tiles.keys())
+        batch_size = self.max_simultaneous
+        n_batches = ceil(len(tiles) / batch_size)
+        requests = []
+        for i in range(n_batches):
+            print(f'scanning batch {i}/{n_batches}')
+            batch = tiles[i*batch_size:(i+1)*batch_size]
+            while (self.last_request + seconds_between_requests) > time():
+                sleep(0.2)
+            self.last_request = time()
+            threads = []
+            for tile in batch:
+                t = RequestThread(self.session, tile)
+                t.start()
+                threads.append(t)
+            for t in threads:
+                r = t.join()
+                if r.status_code != 200:
+                    url = r.url
+                    index = rx.findall(r'\d+', url)[0]
+                    print(f"airspace {index} returned with an error")
+                    self.tracked_tiles.pop(int(index))
+                    errors.append(int(index))
+                else:    
+                    requests.append(r)
             
-            except:
-                pass
+        self.decode_queue.put(requests)
+        
+    def add_airspaces(self):
+        while True:
+            airspace = self.main_queue.get(block=True)
+            if type(airspace) is not Airspace: break
+            self.tracked_airspaces.append(airspace)
+            for tile in airspace.tiles:
+                if tile in self.tracked_tiles.keys():
+                    self.tracked_tiles[tile] += 1
+                else:
+                    self.tracked_tiles[tile] = 1
+    
+    def delete_airspaces(self):
+        while True:
+            airspace = self.main_queue.get(block=True)
+            if type(airspace) is not Airspace: break
+            self.tracked_airspaces.pop(self.tracked_airspaces.index(airspace))
+            for tile in airspace.tiles:
+                self.tracked_tiles[tile] -= 1
+                if self.tracked_tiles[tile] == 0:
+                    del self.tracked_tiles[tile]                    
 
-    def request(self, path) -> Response:
-        data_prefix = '/data/globe_'
-        data_suffix = '.binCraft'
-        url = server_URL + data_prefix + str(path) + data_suffix
-        r = self.session.get(url=url)
-        self.requests.put(r)
-        return r
+    def kill_myself(self):
+        self.decode_queue.put('KILL')
+        self.kill()
+
