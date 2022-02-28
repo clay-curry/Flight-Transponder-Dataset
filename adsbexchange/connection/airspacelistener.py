@@ -7,7 +7,7 @@ import requests as re
 from time import time, sleep
 
 from . import serverconnection
-from ..datum.airspace import Airspace
+from ..persistence.airspace import Airspace
 from adsbexchange import connection
 server_URL = connection.server_URL
 header_conf = connection.header_conf

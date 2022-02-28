@@ -1,6 +1,6 @@
 from typing import List
 from .connection.serverconnection import ServerConnection
-from .datum.airspace import Airspace
+from .persistence.airspace import Airspace
 
 refresh_miliseconds = -1
 

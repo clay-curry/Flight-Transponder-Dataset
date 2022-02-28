@@ -1,5 +1,5 @@
 from .adsb import Adsbexchange
-from .datum.airspace import Airspace
+from .persistence.airspace import Airspace
 
 adsb : Adsbexchange
 

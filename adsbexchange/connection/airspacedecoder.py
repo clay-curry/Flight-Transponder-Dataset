@@ -6,9 +6,9 @@ from typing import List
 import requests as re
 from requests.models import Response
 from multiprocessing import Queue
-from ..datum.airspace import Airspace
-from ..datum.aircraft import AircraftWaypoint
-from ..persistence.sql import SQLite3
+from ..persistence.airspace import Airspace
+from ..persistence.aircraft import AircraftWaypoint
+from .sql import SQLite3
 
 
 

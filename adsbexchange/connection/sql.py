@@ -2,8 +2,8 @@ from multiprocessing import Process, Queue
 from typing import List
 import sys
 from sqlalchemy import create_engine
-from ..datum.aircraft import AircraftWaypoint
-from ..datum.airspace import Airspace
+from ..persistence.aircraft import AircraftWaypoint
+from ..persistence.airspace import Airspace
 
 in_memory: List[AircraftWaypoint] = []
 memory_limit = 0
