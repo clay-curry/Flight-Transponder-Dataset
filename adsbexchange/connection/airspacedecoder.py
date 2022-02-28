@@ -1,3 +1,4 @@
+from multiprocessing import Process
 from socket import timeout
 from threading import Thread, Semaphore
 from time import sleep
@@ -5,69 +6,38 @@ from typing import List
 import requests as re
 from requests.models import Response
 from multiprocessing import Queue
-from . import serverconnection
-from .sql import SQLite3
-from .serverclient import ServerClient
 from ..persistence.airspace import Airspace
 from ..persistence.aircraft import AircraftWaypoint
-from adsbexchange import connection
-server_URL = connection.server_URL
-header_conf = connection.header_conf
+from .sql import SQLite3
 
 
-class AirspaceListener:
 
-    def __init__(self, conn: serverconnection.ServerConnection):
+class AirspaceDecoder(Process):
+
+    def __init__(self, requests: Queue, start_decoding, waypoints: Queue, start_writing):
+        Process.__init__(self)
         self.airspaces: List[Airspace] = []
-        self.sql = SQLite3()
-        self.conn = conn
-        self.r = Queue()
-        self.w = Queue()
-        #(self.r, self.w) = Pipe(duplex=True)
-        self.num_airspaces = Semaphore(0)
-        self.p_server_client = ServerClient(
-            self.conn.sess, self.r, self.w)
-        self.p_server_client.start()
-        self.t_run = Thread(target=self.run)
-        self.t_run.start()
-
+        self.requests = requests
+        self.start_decoding = start_decoding
+        self.waypoints = waypoints
+        self.start_writing = start_writing
+        self.start_writing.acquire() 
+               
     def run(self):
-        data_prefix = '/data/globe_'
-        data_suffix = '.binCraft'
-        last_airspace_index = 0
+        waypoints: List[AircraftWaypoint] = []
         while True:
-            self.num_airspaces.acquire()  # thread waits when there are no airspaces
-            self.num_airspaces.release()
-            last_airspace_index += 1
-            last_airspace_index %= len(self.airspaces)
-            next_airspace = self.airspaces[last_airspace_index]
-
-            for tile in next_airspace.tiles:
-                self.r.put(data_prefix + str(tile[0]) + data_suffix)
-            aircrafts: List[AircraftWaypoint] = []
-            for tile in next_airspace.tiles:
-                r = self.w.get()
-                aircrafts.extend(self.decode_tile(r))
+            self.start_decoding.acquire()
+            for r in self.requests.get():
+                waypoints.extend(self.decode_tile(r))
+            self.start_writing.release()
+            self.waypoints.put(waypoints)
             
-            self.sql.add_buffer(aircrafts)
+            
 
-    def add_airspace(self, airspace: Airspace):
-        if airspace in self.airspaces:
-            return
-        else:
-            self.airspaces.append(airspace)
-            self.num_airspaces.release()
 
-    def remove_airspace(self, airspace: Airspace):
-        if airspace not in self.airspaces:
-            return
-        else:
-            index = self.airspaces.index(airspace)
-            self.airspaces.pop(index)
-            self.num_airspaces.acquire()
-
-    def kill_client(self):
-        self.server_client.kill()
+    def kill_myself(self):
+        # the server stopped responding to me so my life is meaningless
+        self.kill()
 
     def decode_tile(self, data: re.models.Response) -> List[AircraftWaypoint]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
@@ -101,7 +71,7 @@ class AirspaceListener:
         messages = vals[7]
 
         # 1. The allows for types to be encapsulated
-        aircrafts = []
+        waypoints = []
         for off in range(stride, len(data), stride):
             ac = AircraftWaypoint()
             u32 = struct.unpack_from(f'<{int(stride/4)}I', data, off)
@@ -204,7 +174,6 @@ class AirspaceListener:
             if ac.nogps:
                 gps |= 64
                 gps |= 16
-
 
             # must come after the stuff above (validity bits)
 
@@ -319,23 +288,9 @@ class AirspaceListener:
                 part2 = f'{u32[27]:08x}'
                 ac.rId = part2[0:4] + '-' + part2[4]
 
-            aircrafts.append(ac)
+            waypoints.append(ac)
 
-        return aircrafts
-
-
-def enque_tiles(l: AirspaceListener):
-    data_prefix = '/data/globe_'
-    data_suffix = '.binCraft'
-
-    for tile in l.next_airspace_tiles:
-        if l.max_tiles.locked():
-            return
-        path = '/data/globe_' + tile + '.binCraft'
-        if path not in l.waiting_tiles:
-            l.waiting_tiles.append(path)
-            l.w.send(path)
-    return
+        return waypoints
 
 
 if __name__ == "__main__":

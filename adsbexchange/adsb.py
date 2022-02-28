@@ -1,8 +1,5 @@
 from .connection.serverconnection import ServerConnection
-from .datum.airspace import Airspace
-from .datum.aircraft import Aircraft
-from typing import List
-
+from .persistence.airspace import Airspace
 
 refresh_miliseconds = -1
 tracked_regions = []

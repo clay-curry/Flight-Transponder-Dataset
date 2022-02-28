@@ -1,4 +1,5 @@
 from .adsb import Adsbexchange
+from .persistence.airspace import Airspace
 
 adsb = None
 
@@ -150,7 +151,7 @@ def get_resp():
 
 if __name__ == "__main__":
     from connection.serverconnection import ServerConnection
-    from adsbexchange.datum.airspace import Airspace
+    from persistence.airspace import Airspace
     air_sp = Airspace(35.222569, -97.439476, 200)
     conn = ServerConnection()
     conn.add_airspace(air_sp)

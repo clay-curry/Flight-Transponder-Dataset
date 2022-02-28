@@ -1,17 +1,17 @@
 from typing import List
 import sys
-import sqlalchemy
-from adsbexchange.datum.aircraft import Aircraft
+from sqlalchemy import create_engine
+from ..persistence.aircraft import AircraftWaypoint
 
-in_memory: List[Aircraft] = []
+in_memory: List[AircraftWaypoint] = []
 memory_limit = 0
 
 class SQLite3:
     def __init__(self) -> None:
-        self.in_memory: List[Aircraft] = []
+        self.in_memory: List[AircraftWaypoint] = []
         self.add_buffer([])
 
-    def add_buffer(self, crafts: List[Aircraft]) -> None:
+    def add_buffer(self, crafts: List[AircraftWaypoint]) -> None:
         self.in_memory.extend(crafts)
         num_bytes = sys.getsizeof(self.in_memory)
         units = 'bytes'
