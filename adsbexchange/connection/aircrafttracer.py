@@ -11,21 +11,17 @@ from adsbexchange import connection
 from math import ceil
 
 server_URL = connection.server_URL
+header_conf = connection.header_conf
 
 
 max_simultaneous_requests = 8
 seconds_between_requests = 1.6  # seconds
 
 
-class AirspaceListener(Process):
-    """
-    AirspaceListener is an I/O bound process for executing massive network requests with server. 
-    (Recall, a program is I/O bound if it would go faster if the I/O subsystem was faster). 
+class AircraftTracer(Process):
+    """ServerClient is an I/O bound process for executing massive network requests with server. (Recall, a program is I/O bound if it would go faster if the I/O subsystem was faster). 
 
-    Only two of these I/O processes should exist at once the server. 
-    This process systematically asks what's in the sky now. 
-    The other process is for individual historical flight track requests. 
-    These two processes are designed to strictly follow proper network protocols with the server so that data transfer is maximized and connections are not rejected.
+    Only two of these processes should exist. The first process is for GlobalTile requests. The second process is for individual historical flight track requests. These two processes are designed to strictly follow proper network protocols with the server so that data transfer is maximized and connections are not rejected.
 
     If an issue arises with the Server, this process is terminated by the parent process.
 
@@ -69,9 +65,8 @@ class AirspaceListener(Process):
                
                     
 
-    def update_tiles(self):
-        errors = []
-        
+    def get_history(self):
+        errors = []        
         tiles = list(self.tracked_tiles.keys())
         batch_size = self.max_simultaneous
         n_batches = ceil(len(tiles) / batch_size)

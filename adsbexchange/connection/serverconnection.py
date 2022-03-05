@@ -10,7 +10,7 @@ from adsbexchange import connection
 from ..persistence.airspace import Airspace
 from .airspacelistener import AirspaceListener
 from .airspacedecoder import AirspaceDecoder
-from .sql import SQLite3
+from .waypointwriter import WaypointWriter
 
 # suppresses warnings during server request
 getLogger("requests").setLevel(CRITICAL)
@@ -47,7 +47,7 @@ class ServerConnection:
         self.p_decoder  = AirspaceDecoder(decode_queue, database_queue)
         self.p_decoder.start()
         
-        self.p_database = SQLite3(database_queue)
+        self.p_database = WaypointWriter(database_queue)
         self.p_database.start()
         
 
