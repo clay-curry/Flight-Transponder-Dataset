@@ -1,8 +1,10 @@
+import imp
 from multiprocessing import Process
 from typing import List
 import requests as re
 from multiprocessing import Queue
-from ..persistence.aircraft import AircraftWaypoint
+from ..persistence.aircraftwaypoint import AircraftWaypoint
+from time import time
 
 # CPU Bound Process
 class AirspaceDecoder(Process):
@@ -211,8 +213,8 @@ class AirspaceDecoder(Process):
             ac.oat = ac.oat if (u8[77] & 32) else None
             ac.tat = ac.tat if (u8[77] & 32) else None
 
-            if ac.airground == 1:
-                ac.alt_baro = "ground"
+            #if ac.airground == 1:
+             #   ac.alt_baro = "ground"
 
             if (ac.nav_modes):
                 ac.nav_modes = []
@@ -270,6 +272,11 @@ class AirspaceDecoder(Process):
                 part2 = f'{u32[27]:08x}'
                 ac.rId = part2[0:4] + '-' + part2[4]
 
+            if ac.seen is not None:
+                ac.seen = time() - ac.seen
+            if ac.seen_pos is not None:
+                ac.seen_pos = time() - ac.seen_pos
+            
             waypoints.append(ac)
 
         return waypoints

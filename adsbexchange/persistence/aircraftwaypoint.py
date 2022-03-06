@@ -1,7 +1,5 @@
 from typing import Dict, List
 
-from sqlalchemy import Column, Integer, String
-
 class AircraftWaypoint:
     """E
     """

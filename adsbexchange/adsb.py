@@ -1,5 +1,5 @@
 from typing import List
-from .connection.serverconnection import ServerConnection
+from .connection.connectionmanager import ConnectionManager
 from .persistence.airspace import Airspace
 
 refresh_miliseconds = -1
@@ -8,7 +8,7 @@ refresh_miliseconds = -1
 class Adsbexchange:
     def __init__(self, start: bool) -> None:
         if start:
-            self.conn = ServerConnection()
+            self.conn = ConnectionManager()
 
     def add_airspace(self, airspace: Airspace):
         self.conn.add_airspace(airspace)
