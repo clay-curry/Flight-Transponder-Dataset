@@ -1,14 +1,17 @@
+from base64 import decode
 import imp
 from multiprocessing import Process
-from typing import List
+from typing import List, Tuple
 import requests as re
 from multiprocessing import Queue
 from ..persistence.aircraftwaypoint import AircraftWaypoint
+from ..persistence.aircraft import Aircraft
 from time import time
+from adsbexchange import connection
 
 # CPU Bound Process
-class AirspaceDecoder(Process):
-    """Accepts lists of Response objects"""
+class Decoder(Process):
+
     def __init__(self, decode_queue: Queue, database_queue: Queue):
         Process.__init__(self)
         self.decode_queue = decode_queue
@@ -17,19 +20,32 @@ class AirspaceDecoder(Process):
     def run(self):
         waypoints: List[AircraftWaypoint] = []
         while True:
-            requests = self.decode_queue.get(block=True)
-            for request in requests:
-                waypoints.extend(self.decode_tile(request))
-            self.database_queue.mutex.acquire()
-            self.database_queue.put("WAYPOINTS")
-            self.database_queue.put(waypoints)
-            self.database_queue.put('DONE')
-            self.database_queue.mutex.release()
             
+            responses = self.decode_queue.get(block=True)
 
+
+            messages, data = self.decode(responses)
+            
+            
+            for msg, datum in zip(messages, data):
+                self.database_queue.mutex.acquire()
+                self.database_queue.put(f"{msg}")
+                self.database_queue.put(f"{datum}")
+                self.database_queue.put('DONE')
+                self.database_queue.mutex.release()
+                
+
+    def decode(self, responses: List[re.Response]):
+        if responses[0].url.index('binCraft') > 0:
             waypoints = []
+            for response in responses:
+                waypoints.extend(self.decode_live_waypoints(response)) 
+            return connection.WAYPOINTS_INSERT, self.decode_live_waypoints(waypoints)
+        else:
+            return (connection.AIRCRAFTS_INSERT, connection.WAYPOINTS_INSERT), (self.decode_aircraft_history(responses))
 
-    def decode_tile(self, data: re.models.Response) -> List[AircraftWaypoint]:
+
+    def decode_live_waypoints(self, data: re.models.Response) -> List[AircraftWaypoint]:
         """Function decodes a raw byte stream returned from the adsbexchange.com server into something more meaningful.
 
         Note that wherever byte transformations seem ambiguous, trust me, they were confusing to me too. This particular
@@ -287,6 +303,86 @@ class AirspaceDecoder(Process):
                 waypoints.append(ac)
 
         return waypoints
+
+
+
+    def decode_aircraft_history(self, responses: List[Tuple[re.Response, re.Response]]) -> Tuple[List[Aircraft], List[AircraftWaypoint]]:
+        import json
+        waypoints: List[AircraftWaypoint]       = []
+        aircrafts: List[Aircraft]               = []
+        
+        for recent, full in responses:
+            try:
+                recent = json.loads(recent.text)
+                full = json.loads(full.text)
+                ac = Aircraft(recent['icao'].upper())
+                if 'r' in recent.keys():
+                    ac.registration = recent['r'].strip().upper()
+                if 't' in recent.keys():
+                    ac.tail_number = recent['t'].strip().upper()
+                if 'desc' in recent.keys():
+                    ac.description = recent['desc']
+                if 'ownOp' in recent.keys():
+                    ac.owner = recent['ownOp']
+                if 'year' in recent.keys():
+                    ac.year = recent['year']
+
+                
+                trace_full = full['trace']
+                for f in trace_full:
+                    f[0] += full['timestamp']
+
+                trace_recent = recent['trace']
+                for r in trace_recent:
+                    r[0] += recent['timestamp']
+                    if r[0] < f[0][0]:
+                        trace_recent.remove(r)
+
+                if self.aircrafts.index(ac) != -1:
+                    last_fetch = self.aircrafts[self.aircrafts.index(ac)].last_track_fetch
+                    for f in trace_full:
+                        if f[0] < last_fetch:
+                            trace_full.remove(f)
+        
+                for w in (trace_full, trace_recent):
+                    wp = AircraftWaypoint()
+                    wp.hex = ac.hex
+                    wp.lat = w[1]
+                    wp.lon = w[2]
+                    wp.gs = w[4]
+                    wp.track = w[5]
+                    wp.alt_geom = w[10]
+
+                    is_alt_geom = w[6] & 8
+                    if w[3] != 'ground' and is_alt_geom:
+                        wp.alt_geom = w[3]
+                    else:
+                        wp.alt_baro = w[3]
+                        
+                    data = w[8]
+                    if data is not None:
+                        ac.category = data['category']
+                        wp.flight = data['flight'].trim()
+                        wp.nic = data['nic']
+                        wp.rc = data['rc']
+                        wp.version = data['version']
+                        wp.nic_baro = data['nic_baro']
+                        wp.nac_p = data['nac_p']
+                        wp.nac_v = data['nac_v']
+                        wp.sil = data['sil']
+                        wp.sil_type = data['sil_type']
+                        wp.gva = data['gva']
+                        wp.sda = data['sda']
+                        
+                    waypoints.append(wp)
+
+                ac.last_track_fetch = time()
+                aircrafts.append(ac)
+
+            except Exception:
+                pass
+
+        return aircrafts, waypoints
 
 
 if __name__ == "__main__":

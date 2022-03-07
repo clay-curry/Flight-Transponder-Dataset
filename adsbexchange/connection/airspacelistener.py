@@ -13,7 +13,6 @@ from adsbexchange import connection
 from math import ceil
 
 
-
 server_URL                  = connection.server_URL
 new_cookie_head             = connection.new_cookie_head
 header_conf                 = connection.header_conf
@@ -24,12 +23,10 @@ MAX_TILES_EACH_REQUEST      = 8
 ONLINE = True
 OFFLINE = False
 
-SKIP_CONN = False
-
-class AirspaceListener(Process):
+class AirspaceListener(Thread):
     """
-    AirspaceListener is an I/O bound process for executing massive network requests with server. 
-    (Recall, a program is I/O bound if it would go faster if the I/O subsystem was faster). 
+    AirspaceListener is an I/O bound thread for executing massive network requests with server. 
+    (I/O bound if it would go faster if the I/O subsystem was faster). 
 
     Only two of these I/O processes should exist at once the server. 
     This process systematically asks what's in the sky now. 
@@ -44,66 +41,48 @@ class AirspaceListener(Process):
     # IO Bound Process
 
     def __init__(self, index: int, parent_conn: Connection, child_conn: Connection, decode_queue: Queue):
-        Process.__init__(self)
+        Thread.__init__(self)
         # Interprocess communication
         self.index              = index
         self.conn               = parent_conn
-        self._child_conn       = child_conn
+        self._conn_to_parent    = child_conn
         self._decode_queue      = decode_queue
         
         # Administering network requests
         self.last_request         = 0
         self.session: re.Session  = None
         self.tiles                = []
+        self.errors               = 0
         
         
     def run(self):
         try:
-            if SKIP_CONN:
-                pass
-            else:
-                self.session = self.new_session()
-                r = self.session.get(server_URL)
-                if r.status_code != 200:
-                    print("An airspace listener failed to form a connection with server. Trying again in 2 seconds")
-                    sleep(2)
-                    self.session = self.new_session()
-                    r = self.session.get(server_URL)
-                    if r.status_code != 200:
-                        self._child_conn.send("ERROR")
+            self.session = connection.new_session()
         except:
-            self._child_conn.send("ERROR")
-        
-        self._child_conn.send('SUCCESS')
+            self._conn_to_parent.send("ERROR")
 
         while True:
             try:
                 timeout = None if len(self.tiles) == 0 else 0
-                if self._child_conn.poll(timeout):
-                    m = self._child_conn.recv()
+                if self._conn_to_parent.poll(timeout):
+                    m = self._conn_to_parent.recv()
                     if m == "ADD":
-                        self.append_tiles()
+                        self.add_tiles()
                     elif m == "REMOVE":
                         self.remove_tiles()
                     elif m == "LIST":
-                        self._child_conn.send(self.tiles.copy())
-                    elif m == "RECONNECT":
-                        self.session = self.new_session()
-                    
+                        self._conn_to_parent.send(self.tiles.copy())
                 else:
                     self.update_tiles()
             except:
-                self._child_conn.send("ERROR")             
+                self._conn_to_parent.send("ERROR")             
 
     def update_tiles(self):
         batch_size = min(MAX_TILES_EACH_REQUEST, len(self.tiles))
-        
         n_batches = ceil(len(self.tiles) / batch_size)
         requests = []
 
-        errors = 0
         for b in range(n_batches):
-            print(f'Listener ({self.index}) scanning batch {b+1}/{n_batches}. Errors Ecountered: {errors}')
             
             batch = self.tiles[b*batch_size:(b+1)*batch_size]
             while (self.last_request + DELAY_BETWEEN_REQUESTS) > time():
@@ -119,50 +98,22 @@ class AirspaceListener(Process):
             for t in threads:
                 r, index = t.join()
                 while r.status_code != 200:
-                    print(f"airspace {index} returned with an error. Attempting to restore connection")    
-                    self.session = self.new_session()
+                    self.errors += 1
+                    self.session = connection.new_session()
                     t = RequestThread(self.session, index)
                     t.start()
                     r, index = t.join()
-                    sleep(5)
+                    
                 else:    
-                    retry = False
                     requests.append(r)
+
+            print(f'Listener ({self.index}) gathered a batch ({b} / {n_batches}) of live waypoints. Errors Ecountered: {self.errors}')
             
         self._decode_queue.put(requests)
 
-    def new_session(self) -> re.Session:
-        from time import time
-        from random import choices
-        from string import ascii_lowercase
-        from urllib3.exceptions import HeaderParsingError
-        
-        
-        sumbit_time_ms = int(time() * 1000)
-        cookie_expire = str(sumbit_time_ms + 2*86400*1000)  # two days
-        cookie_token = '_' + \
-            ''.join(choices(ascii_lowercase + '1234567890', k=11))
-        cookie = 'adsbx_sid=' + cookie_expire + cookie_token
-
-        submit_cookie_url = server_URL + \
-            '/globeRates.json?_=' + str(sumbit_time_ms)
-
-        new_cookie_head['cookie'] = cookie
-        try:
-            r = re.get(submit_cookie_url, headers=new_cookie_head)
-        except HeaderParsingError:
-            # the server's responses cause urllib to throw a HeaderParsingError 
-            # (this is normal and a result of their data compression scheme)
-            pass
-            
-        s = re.Session()
-        s.headers = header_conf
-        s.headers['cookie'] = cookie
-        return s
-
-    def append_tiles(self):
+    def add_tiles(self):
         while True:
-            tile = self._child_conn.recv()
+            tile = self._conn_to_parent.recv()
             if tile == "DONE":
                 break
             else:
@@ -170,7 +121,7 @@ class AirspaceListener(Process):
             
     def remove_tiles(self):
         while True:
-            tile = self._child_conn.recv()
+            tile = self._conn_to_parent.recv()
             if tile == "DONE":
                 break
             else:

@@ -9,7 +9,7 @@ class Airspace():
         self.lon1 = 0
         self.lat2 = 0
         self.lon2 = 0
-        self.tiles = tiles
+        self.tiles: List[int] = tiles
     
 
 # number of lat, long divisions per tile

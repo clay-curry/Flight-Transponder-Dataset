@@ -1,137 +1,156 @@
-from typing import List, Dict
+from multiprocessing.connection import Connection
+from queue import Full
+from re import L
+from typing import List, Tuple
 from multiprocessing import Process, Queue
-import queue
 from threading import Thread
-from requests.models import Response
-import requests as re
-import regex as rx
-from time import time, sleep
-from ..persistence.airspace import Airspace
-from adsbexchange import connection
 from math import ceil
+import requests as re
+from time import time, sleep
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine 
+from adsbexchange import connection
+from ..persistence.aircraft import Aircraft
+from ..persistence.aircraftwaypoint import AircraftWaypoint
 
-server_URL = connection.server_URL
-header_conf = connection.header_conf
+
+DELAY_BETWEEN_REQUESTS      = 1.6       # seconds
+MAX_PLANES_EACH_REQUEST     = 8         # number of planes
+PING_PLANE_EVERY            = 5 * 60    # delay between planes
 
 
-max_simultaneous_requests = 8
-seconds_between_requests = 1.6  # seconds
+class AircraftTracer(Thread):
+    """AircraftTracer is an I/O bound process for executing massive network requests with server. (Recall, a program is I/O bound if it would go faster if the I/O subsystem was faster). 
 
-
-class AircraftTracer(Process):
-    """ServerClient is an I/O bound process for executing massive network requests with server. (Recall, a program is I/O bound if it would go faster if the I/O subsystem was faster). 
-
-    Only two of these processes should exist. The first process is for GlobalTile requests. The second process is for individual historical flight track requests. These two processes are designed to strictly follow proper network protocols with the server so that data transfer is maximized and connections are not rejected.
-
-    If an issue arises with the Server, this process is terminated by the parent process.
-
-    Args:
-        sess: re.Session: _description_
-
-    Returns:
-        _type_: _description_
+    AircraftTracer maintains a list of known Aircraft, together with related attributes
 
     Author:
         Clay Curry
     """
     # IO Bound Process
 
-    def __init__(self, session: re.Session, main_queue: Queue, decode_queue: Queue):
-        Process.__init__(self)
-        self.tracked_airspaces: List[Airspace]  = []
-        self.tracked_tiles: Dict[int, int] = {}
-        self.last_request               = 0
-        self.session                    = session
-        self.main_queue                 = main_queue
+    def __init__(self, index: int, parent_conn: Connection, child_conn: Connection, decode_queue: Queue):
+        Thread.__init__(self)
+        # Interprocess communication
+        self.index                      = index
+        self.conn                       = parent_conn
+        self._conn_to_parent            = child_conn
         self.decode_queue               = decode_queue
-        self.max_simultaneous = 8
+        
+        # Administering network requests
+        self.last_request               = 0
+        self.session: re.Session        = None
+        self._db_reader: Engine         = None
+        self.aircrafts: List[Aircraft]   = []
+        self.errors: int                = 0
+        
         
     def run(self):
-        index = 0
-        self.request_queue              = queue.Queue()   
-        
+        try:
+            self.session = connection.new_session()
+            self._db_reader = create_engine(f"{connection.NAME_DB}", echo=connection.ECHO_DB, future=True)
+        except:
+            self._conn_to_parent.send("ERROR")
+
         while True:
             try:
-                m = None
-                m = self.main_queue.get(block=(len(self.tracked_tiles) == 0))
-                if m == "ADD":
-                    self.add_airspaces()
-                elif m == "DELETE":
-                    self.delete_airspaces()
-                elif m == 'KILL':
-                    self.kill_myself()
-            except queue.Empty:
-                self.update_tiles()
-               
-                    
-
-    def get_history(self):
-        errors = []        
-        tiles = list(self.tracked_tiles.keys())
-        batch_size = self.max_simultaneous
-        n_batches = ceil(len(tiles) / batch_size)
-        requests = []
-        for i in range(n_batches):
-            print(f'scanning batch {i}/{n_batches}')
-            batch = tiles[i*batch_size:(i+1)*batch_size]
-            while (self.last_request + seconds_between_requests) > time():
-                sleep(0.2)
-            self.last_request = time()
-            threads = []
-            for tile in batch:
-                t = RequestThread(self.session, tile)
-                t.start()
-                threads.append(t)
-            for t in threads:
-                r = t.join()
-                if r.status_code != 200:
-                    url = r.url
-                    index = rx.findall(r'\d+', url)[0]
-                    print(f"airspace {index} returned with an error")
-                    self.tracked_tiles.pop(int(index))
-                    errors.append(int(index))
-                else:    
-                    requests.append(r)
-            
-        self.decode_queue.put(requests)
-        
-    def add_airspaces(self):
-        while True:
-            airspace = self.main_queue.get(block=True)
-            if type(airspace) is not Airspace: break
-            self.tracked_airspaces.append(airspace)
-            for tile in airspace.tiles:
-                if tile in self.tracked_tiles.keys():
-                    self.tracked_tiles[tile] += 1
+                timeout = None if len(self.aircrafts) == 0 else 0
+                if self._conn_to_parent.poll(timeout):
+                    m = self._conn_to_parent.recv()
+                    if m == "ADD":
+                        add_aircraft(self)
+                    elif m == "REMOVE":
+                        remove_aircraft(self)
                 else:
-                    self.tracked_tiles[tile] = 1
+                    trace_aircrafts(self)
+            except Exception as e:
+                self._conn_to_parent.send("ERROR")             
+
+def trace_aircrafts(self):
+    requests = execute_requests(self)
+    ac_list, waypoint_list = decode(self, requests)
+
+def add_aircraft(self: AircraftTracer):
+    ac: Aircraft
+    while True:
+        ac = self._conn_to_parent.recv()
+        if ac == "DONE":
+            break
+        else:
+            if ac in self.aircrafts:
+                return
+            
+            with self._db_reader.connect() as conn:
+                resp = conn.execute(
+                    text(f'SELECT last_track_fetch FROM {connection.AIRCRAFTS_TABLE} WHERE hex="{ac.hex}"')
+                )
+                if len(resp) > 0:
+                    ac.last_track_fetch = resp["last_track_fetch"]
+            self.aircrafts.append(ac)
+        
+def remove_aircraft(self):
+    while True:
+        ac = self._conn_to_parent.recv()
+        if ac == "DONE":
+            break
+        elif ac in self.aircrafts:
+            self.aircrafts.remove(ac)
+
+def execute_requests(self) -> List[Tuple[re.Response, re.Response]]:
+    batch_size = min(MAX_PLANES_EACH_REQUEST, len(self.aircrafts))
+    n_batches = ceil(len(self.aircrafts) / batch_size)
+    requests = []
     
-    def delete_airspaces(self):
-        while True:
-            airspace = self.main_queue.get(block=True)
-            if type(airspace) is not Airspace: break
-            self.tracked_airspaces.pop(self.tracked_airspaces.index(airspace))
-            for tile in airspace.tiles:
-                self.tracked_tiles[tile] -= 1
-                if self.tracked_tiles[tile] == 0:
-                    del self.tracked_tiles[tile]                    
+    for b in range(n_batches):
+            
+        batch = self.aircrafts[b*batch_size:(b+1)*batch_size]
+        while (self.last_request + DELAY_BETWEEN_REQUESTS) > time():
+            sleep(0.2)
+        self.last_request = time()
+        
+        threads = []
+        for aircraft in batch:
+            t = RequestThread(self.session, aircraft.hex)
+            t.start()
+            threads.append(t)
 
-    def kill_myself(self):
-        self.decode_queue.put('KILL')
-        self.kill()
+        for t in threads:
+            recent, full, hex = t.join()
+            while full.status_code != 200:
+                errors += 1
+                self.session = connection.new_session()
+                t = RequestThread(self.session, hex)
+                t.start()
+                recent, full, hex = t.join()
+            
+            requests.append((recent, full))
 
+        print(f'Tracer ({self.index}) gathered a batch ({b} / {n_batches}) of its assigned historical tracks. Errors Ecountered: {self.errors}')
+
+    return requests
 
 class RequestThread(Thread):
-    def __init__(self, session: re.Session, tile_index: int):
+    def __init__(self, session: re.Session, hexidec: str):
         Thread.__init__(self)
         self.session = session
-        self.tile_index = tile_index
+        self.hexidec = hexidec.lower()
         self._return = None
+
     def run(self):
-        data_prefix = '/data/globe_'
-        data_suffix = '.binCraft'
-        url = server_URL + data_prefix + str(self.tile_index).zfill(4) + data_suffix
-        self._return = self.session.get(url=url)         
+        data_prefix = '/data/traces/' # last two of icao hex
+        data_recent_midfix = '/trace_recent_'
+        data_full_midfix = '/trace_full_'  # icao hex
+        data_suffix = '.json'
+        last_two = self.hexidec[-2:]
+        url = connection.server_URL + data_prefix + last_two + data_recent_midfix + self.hexidec + data_suffix
+        recent = self.session.get(url=url)
+        url = connection.server_URL + data_prefix + last_two + data_full_midfix + self.hexidec + data_suffix 
+        full = self.session.get(url=url)
+        self._return = recent, full, self.hexidec
+
     def join(self):
         Thread.join(self)
         return self._return
+
+
+    
