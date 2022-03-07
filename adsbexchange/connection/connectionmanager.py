@@ -1,6 +1,8 @@
 from inspect import trace
+from logging.config import listen
 from multiprocessing import Queue, Pipe
 from multiprocessing.connection import Connection
+from time import sleep
 from typing import List, Dict, Tuple
 from ..persistence.airspace import Airspace
 from ..persistence.aircraft import Aircraft
@@ -13,7 +15,7 @@ from .dbwriter import DBWriter
 
 
 MAX_AIRSPACE_LISTENERS  = 5
-PREF_TILES_PER_LISTENER = 64
+PREF_TILES_PER_LISTENER = 25
 MAX_TILES_PER_LISTENER  = 120
 
 EXPECTED_AIRCRAFTS = 60000  # aircrafts
@@ -53,22 +55,26 @@ class ConnectionManager:
         for t in tiles:
             if t in self.tracked_tiles:
                 tiles.remove(t)
+                self.tracked_tiles[t][0] += 1
 
-        while len(tiles) > 0:
-            listener, capacity = get_available_listener(self)
-            listener.tiles = tiles[0:capacity]
-            listener.conn.send('ADD')
-            [listener.conn.send(tile) for tile in tiles[0:capacity]]
-            listener.conn.send('DONE')
-            self.tracked_tiles.update({tile: (0, listener) for tile in tiles[0:capacity]})
-            tiles = tiles[capacity:]
+        listener_assignments = get_listener_assignments(self, tiles)     
+        for assignment in listener_assignments:
+            if len(assignment) == 0:
+                pass
+            else:
+                listener = self.listeners[listener_assignments.index(assignment)]
+                listener.tiles.extend(assignment)
+                
+                self.tracked_tiles.update(
+                    {tile: (1, listener, ) for tile in assignment}
+                )
+
+                listener.conn.send('ADD')
+                [listener.conn.send(tile) for tile in assignment]
+                listener.conn.send('DONE')
+            
 
 
-        for tile in airspace.tiles:
-            (v, l) = self.tracked_tiles[tile]
-            self.tracked_tiles[tile] = (v+1, l)
-
-        
     def remove_airspace(self, airspace: Airspace) -> Airspace:
         if airspace not in self.airspaces:
             return
@@ -140,7 +146,12 @@ def _initialize_listeners(self, num) -> List[AirspaceListener]:
         parent_conn, child_conn = Pipe()
         t = AirspaceListener(index=i, parent_conn=parent_conn, child_conn=child_conn, decode_queue=self.decoder.decode_queue)
         t.start()
+        t.conn.poll(timeout=10)
+        signal = t.conn.recv()
+        if signal != "SUCCESS":
+            raise ConnectionError()
         threads.append(t)
+        sleep(.1)
     return threads
 
 def _initialize_tracers(self, num) -> List[AircraftTracer]:
@@ -149,41 +160,31 @@ def _initialize_tracers(self, num) -> List[AircraftTracer]:
         parent_conn, child_conn = Pipe()
         t = AircraftTracer(index=i, parent_conn=parent_conn, child_conn=child_conn, decode_queue=self.decoder.decode_queue)
         t.start()
+        t.conn.poll(timeout=10)
+        signal = t.conn.recv()
+        if signal != "SUCCESS":
+            raise ConnectionError()
         threads.append(t)
+        sleep(.1)
     return threads
 
 
+def get_listener_assignments(self: ConnectionManager, tiles: List[int]) -> Tuple[AirspaceListener, int]:
+    tile_counters = [len(l.tiles) for l in self.listeners]
+    listener_assignments = [[] for _ in range(len(tile_counters))]
+    
+    for tile in tiles:
+        min_tile_count = min(tile_counters)
+        if min_tile_count >= MAX_TILES_PER_LISTENER:
+            raise ConnectionError("The request for additional listeners exceeds available capacity.")
 
-def get_available_listener(self) -> Tuple[AirspaceListener, int]:
-        """returns a tuple containing a Connection to the next available AirspaceListener with its capacity"""
-        # 1. Get the next listener below preferred capacity
-        for listener in self.listeners:
-            size = len(listener.tiles)
-            if size < PREF_TILES_PER_LISTENER:
-                return listener, PREF_TILES_PER_LISTENER - size
-
-        # 2. Make a new listener if above preferred capacity
-        if len(self.listeners) < MAX_AIRSPACE_LISTENERS:
-            index = 0
-            if len(self.listeners) > 0:    
-                index = max([l.index for l in self.listeners]) + 1
-            parent_conn, child_conn = Pipe()
-            listener = AirspaceListener(index=index, parent_conn=parent_conn, child_conn=child_conn, decode_queue=self.decoder.decode_queue)
-            listener.start()
-            if parent_conn.recv() != 'SUCCESS':
-                raise ConnectionRefusedError("An AirspaceListener could not connect to the server")
-            self.listeners.append(listener)            
-            return listener, PREF_TILES_PER_LISTENER
-
-        # 3. Get all  
-        for listener in self.listeners:
-            size = len(listener.tiles)
-            capacity = MAX_TILES_PER_LISTENER - size
-            if capacity > 0:
-                return listener, capacity
+        min_tile_index = tile_counters.index(min_tile_count)
+        tile_counters[min_tile_index] += 1
+        listener_assignments[min_tile_index].append(tile)
         
-        raise ConnectionError("The request for additional listeners exceeds available capacity.")
-        
+    return listener_assignments
+
+
 def assign_tracer(self: ConnectionManager) -> AircraftTracer:
     # 1. Get the next listener below preferred capacity
         for tracer in self.tracers:

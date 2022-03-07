@@ -48,8 +48,9 @@ class AircraftTracer(Thread):
     def run(self):
         try:
             self.session = connection.new_session()
-            self._db_reader = create_engine(f"{connection.NAME_DB}", echo=connection.ECHO_DB, future=True)
-        except:
+            self._db_reader = create_engine(f"sqlite:///{connection.NAME_DB}", echo=connection.ECHO_DB, future=True)
+            self._conn_to_parent.send("SUCCESS")
+        except Exception as e:
             self._conn_to_parent.send("ERROR")
 
         while True:

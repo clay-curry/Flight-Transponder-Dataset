@@ -28,11 +28,9 @@ class Decoder(Process):
             
             
             for msg, datum in zip(messages, data):
-                self.database_queue.mutex.acquire()
                 self.database_queue.put(f"{msg}")
                 self.database_queue.put(f"{datum}")
                 self.database_queue.put('DONE')
-                self.database_queue.mutex.release()
                 
 
     def decode(self, responses: List[re.Response]):
@@ -40,9 +38,9 @@ class Decoder(Process):
             waypoints = []
             for response in responses:
                 waypoints.extend(self.decode_live_waypoints(response)) 
-            return connection.WAYPOINTS_INSERT, self.decode_live_waypoints(waypoints)
+            return (connection.WAYPOINTS_INSERT,), (waypoints,)
         else:
-            return (connection.AIRCRAFTS_INSERT, connection.WAYPOINTS_INSERT), (self.decode_aircraft_history(responses))
+            return (connection.AIRCRAFTS_INSERT, connection.WAYPOINTS_INSERT,), (self.decode_aircraft_history(responses))
 
 
     def decode_live_waypoints(self, data: re.models.Response) -> List[AircraftWaypoint]:
@@ -61,7 +59,9 @@ class Decoder(Process):
 
         import struct
         import math
+
         data = data.content
+
         # let vals = new Uint32Array(data.buffer, 0, 8)
         vals = struct.unpack_from('<8I', data, 0)
 

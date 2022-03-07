@@ -58,6 +58,7 @@ class AirspaceListener(Thread):
     def run(self):
         try:
             self.session = connection.new_session()
+            self._conn_to_parent.send("SUCCESS")
         except:
             self._conn_to_parent.send("ERROR")
 
