@@ -29,7 +29,7 @@ class Decoder(Process):
             
             for msg, datum in zip(messages, data):
                 self.database_queue.put(f"{msg}")
-                self.database_queue.put(f"{datum}")
+                self.database_queue.put(datum)
                 self.database_queue.put('DONE')
                 
 
@@ -38,7 +38,7 @@ class Decoder(Process):
             waypoints = []
             for response in responses:
                 waypoints.extend(self.decode_live_waypoints(response)) 
-            return (connection.WAYPOINTS_INSERT,), (waypoints,)
+            return ('WAYPOINTS',), (waypoints,)
         else:
             return (connection.AIRCRAFTS_INSERT, connection.WAYPOINTS_INSERT,), (self.decode_aircraft_history(responses))
 

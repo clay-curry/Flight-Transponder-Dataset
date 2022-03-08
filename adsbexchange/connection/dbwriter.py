@@ -44,19 +44,21 @@ class DBWriter(Process):
     def insert(self, insert_msg):
         wpts = []
         hex = []
-        msg = ""
-        while msg != "DONE":
-            msg = self.db_queue.get(block=True)            
-            if type(msg) == list:
+        msg = []
+        while True:
+            msg = self.db_queue.get(block=True)
+            if msg == "DONE":
+                break           
+            if isinstance(msg,list):
                 wpts.extend(msg)
-                hex.extend([h.hex for h in msg])
+
             else:
                 wpts.append(msg)
                 hex.append(msg.hex)
 
         with self.engine.connect() as sess:
-            try:
-                for wp in wpts:
+            for wp in wpts:
+                try:
                     sess.execute(
                         text(insert_msg),
                             [wp.to_dict()]
@@ -64,9 +66,9 @@ class DBWriter(Process):
                     self.waypoint_count += 1
 
 
-            except Exception as e:
-                if connection.ECHO_DB:
-                    print(f'due to an error ({e}), the following waypoint was not added: {ac}')
-            finally:
-                sess.commit()
-                print(f"The application has written {wp} live waypoints.")
+                except Exception as e:
+                    if connection.ECHO_DB:
+                        print(f'due to an error ({e}), the following waypoint was not added: {ac}')
+
+            sess.commit()
+            print(f"The application has written {self.waypoint_count} live waypoints.")

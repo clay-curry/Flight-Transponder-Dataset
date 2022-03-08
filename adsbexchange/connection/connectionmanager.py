@@ -70,9 +70,11 @@ class ConnectionManager:
                 )
 
                 listener.conn.send('ADD')
-                [listener.conn.send(tile) for tile in assignment]
+                # [listener.conn.send(tile) for tile in assignment]
                 listener.conn.send('DONE')
-            
+                listener.conn.poll()
+                m = listener.conn.recv()
+
 
 
     def remove_airspace(self, airspace: Airspace) -> Airspace:
@@ -137,7 +139,7 @@ class ConnectionManager:
 
     def __del__(self):
         print("Called Destructor on ConnectionManager")
-        self.kill_children()
+        # self.kill_children()
 
 
 def _initialize_listeners(self, num) -> List[AirspaceListener]:
@@ -146,7 +148,7 @@ def _initialize_listeners(self, num) -> List[AirspaceListener]:
         parent_conn, child_conn = Pipe()
         t = AirspaceListener(index=i, parent_conn=parent_conn, child_conn=child_conn, decode_queue=self.decoder.decode_queue)
         t.start()
-        t.conn.poll(timeout=10)
+        t.conn.poll(timeout=1000)
         signal = t.conn.recv()
         if signal != "SUCCESS":
             raise ConnectionError()

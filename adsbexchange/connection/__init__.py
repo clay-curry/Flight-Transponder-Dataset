@@ -154,7 +154,7 @@ def new_session() -> re.Session:
             pass
             
         s = re.Session()
-        s.headers = header_conf
+        s.headers = header_conf.copy()
         s.headers['cookie'] = cookie
         r = s.get(server_URL)
         return s
