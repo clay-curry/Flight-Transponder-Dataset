@@ -1,8 +1,12 @@
 # Mining Data Sets
 
 ## Purpose
-The following repository gathers source code for scrubbing, aggregating, transforming, and visualizing real world data in support of Project 70's goals.
-To prevent a network bottleneck for those wishing to clone this repository, the database associated with this code is not included in this repository; it contains only the source code used to generate a database.
+This repo presents source code for scraping and decoding real world flight trajectory data (source: [adsbexchange.com](https://globe.adsbexchange.com)), by storing [ADSB messages](https://www.faa.gov/air_traffic/technology/adsb) in a local relational database. To comply with GitHub's data volume limit, the actual database was not included anywhere in the repo history; it contains only the source code used to generate a database. 
+
+## Disclaimer
+The work here was admittedly put together in a haste for an unscheduled presentation with [OADII](https://www.ou.edu/oadii), and DOES NOT REPRESENT MY BEST WORK OR ALLEGANCE WITH “Good Code Documents Itself”. Do not expect instructions for making it run in your use case; moreover, do not expect anything to run at all on the latest branch. The first step in any attempt to go further with this project is a massive refactoring. 
+
+In fact, if flight data is desired for your research, you should first consider reaching out to organizers at the [OpenSky Network](https://opensky-network.org/). 
 
 
 ## Flight Tracks
